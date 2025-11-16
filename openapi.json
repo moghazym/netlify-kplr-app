@@ -1,0 +1,5121 @@
+{
+    "openapi": "3.1.0",
+    "info": {
+      "title": "kplr API",
+      "description": "A secure and scalable API for kplr",
+      "version": "1.0.0"
+    },
+    "paths": {
+      "/api/auth/register": {
+        "post": {
+          "tags": [
+            "Authentication"
+          ],
+          "summary": "Register",
+          "description": "Register a new user",
+          "operationId": "register_api_auth_register_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserCreate"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "201": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/login": {
+        "post": {
+          "tags": [
+            "Authentication"
+          ],
+          "summary": "Login",
+          "description": "Login user and return access and refresh tokens",
+          "operationId": "login_api_auth_login_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserLogin"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Token"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/refresh": {
+        "post": {
+          "tags": [
+            "Authentication"
+          ],
+          "summary": "Refresh Token",
+          "description": "Refresh access token using refresh token from cookie or body",
+          "operationId": "refresh_token_api_auth_refresh_post",
+          "parameters": [
+            {
+              "name": "refresh_token",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "string",
+                "title": "Refresh Token"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/Token"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/me": {
+        "get": {
+          "tags": [
+            "Authentication"
+          ],
+          "summary": "Get Current User Info",
+          "description": "Get current user information",
+          "operationId": "get_current_user_info_api_auth_me_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "put": {
+          "tags": [
+            "Authentication"
+          ],
+          "summary": "Update Current User",
+          "description": "Update current user information",
+          "operationId": "update_current_user_api_auth_me_put",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "User Update"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/UserResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/change-password": {
+        "post": {
+          "tags": [
+            "Authentication"
+          ],
+          "summary": "Change Password",
+          "description": "Change user password",
+          "operationId": "change_password_api_auth_change_password_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordChange"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/google": {
+        "get": {
+          "tags": [
+            "Authentication"
+          ],
+          "summary": "Google Auth Initiate",
+          "description": "Initiate Google OAuth flow",
+          "operationId": "google_auth_initiate_api_auth_google_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "additionalProperties": true,
+                    "type": "object",
+                    "title": "Response Google Auth Initiate Api Auth Google Get"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/google/callback": {
+        "post": {
+          "tags": [
+            "Authentication"
+          ],
+          "summary": "Google Auth Callback",
+          "description": "Handle Google OAuth callback with authorization code (supports both Web and Desktop flows)",
+          "operationId": "google_auth_callback_api_auth_google_callback_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Callback Data"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "additionalProperties": true,
+                    "type": "object",
+                    "title": "Response Google Auth Callback Api Auth Google Callback Post"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/auth/logout": {
+        "post": {
+          "tags": [
+            "Authentication"
+          ],
+          "summary": "Logout",
+          "description": "Logout user (client should discard tokens)",
+          "operationId": "logout_api_auth_logout_post",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/computer-use/sessions": {
+        "post": {
+          "tags": [
+            "Computer Use",
+            "computer-use"
+          ],
+          "summary": "Create Agent Session",
+          "description": "Create a new agent session with initial step.\n\nThis initializes a new agentic workflow for a user query and automatically\ncreates the first step to avoid the wasted open_web_browser call.\nThe session UUID is returned and should be used for all subsequent step executions.",
+          "operationId": "create_agent_session_api_computer_use_sessions_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionCreateRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "201": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SessionCreateResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/computer-use/sessions/{session_uuid}/steps": {
+        "post": {
+          "tags": [
+            "Computer Use",
+            "computer-use"
+          ],
+          "summary": "Execute Agent Step",
+          "description": "Execute the next step in the agent workflow.\n\nThe Electron client sends the current browser state (screenshot + context),\nand the backend queries Gemini for the next action(s) to take.\n\nThe response contains:\n- reasoning: Why the agent is taking this action\n- actions: List of Playwright commands to execute\n- status: Whether to CONTINUE or COMPLETE the workflow",
+          "operationId": "execute_agent_step_api_computer_use_sessions__session_uuid__steps_post",
+          "parameters": [
+            {
+              "name": "session_uuid",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Session Uuid"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepExecuteRequest"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/StepExecuteResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/computer-use/sessions/{session_uuid}/steps/{step_id}/complete": {
+        "post": {
+          "tags": [
+            "Computer Use",
+            "computer-use"
+          ],
+          "summary": "Complete Step Execution",
+          "description": "Mark step actions as executed and save post-execution state.\n\nCalled by the Electron client after executing all Playwright actions.\nStores the resulting screenshot and updated context.",
+          "operationId": "complete_step_execution_api_computer_use_sessions__session_uuid__steps__step_id__complete_post",
+          "parameters": [
+            {
+              "name": "session_uuid",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Session Uuid"
+              }
+            },
+            {
+              "name": "step_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Step Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Request"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/computer-use/sessions/{session_uuid}/status": {
+        "get": {
+          "tags": [
+            "Computer Use",
+            "computer-use"
+          ],
+          "summary": "Get Session Status",
+          "description": "Get the current status of an agent session.",
+          "operationId": "get_session_status_api_computer_use_sessions__session_uuid__status_get",
+          "parameters": [
+            {
+              "name": "session_uuid",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Session Uuid"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SessionStatusResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/computer-use/sessions/{session_uuid}/latest-screenshot": {
+        "get": {
+          "tags": [
+            "Computer Use",
+            "computer-use"
+          ],
+          "summary": "Get Latest Screenshot",
+          "description": "Get the latest screenshot for a session.",
+          "operationId": "get_latest_screenshot_api_computer_use_sessions__session_uuid__latest_screenshot_get",
+          "parameters": [
+            {
+              "name": "session_uuid",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Session Uuid"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/computer-use/sessions/{session_uuid}/history": {
+        "get": {
+          "tags": [
+            "Computer Use",
+            "computer-use"
+          ],
+          "summary": "Get Session History",
+          "description": "Get the complete execution history of a session.",
+          "operationId": "get_session_history_api_computer_use_sessions__session_uuid__history_get",
+          "parameters": [
+            {
+              "name": "session_uuid",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Session Uuid"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SessionHistoryResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/computer-use/sessions/{session_uuid}": {
+        "delete": {
+          "tags": [
+            "Computer Use",
+            "computer-use"
+          ],
+          "summary": "Cancel Session",
+          "description": "Cancel an active agent session.",
+          "operationId": "cancel_session_api_computer_use_sessions__session_uuid__delete",
+          "parameters": [
+            {
+              "name": "session_uuid",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "Session Uuid"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/computer-use/exploration-actions": {
+        "post": {
+          "tags": [
+            "Computer Use",
+            "computer-use"
+          ],
+          "summary": "Generate Exploration Actions",
+          "description": "Return independent UI actions that can be executed from the provided screenshot.",
+          "operationId": "generate_exploration_actions_api_computer_use_exploration_actions_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplorationActionsRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ExplorationActionsResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/images/upload": {
+        "post": {
+          "tags": [
+            "Images",
+            "images"
+          ],
+          "summary": "Upload Image",
+          "description": "Upload an image file.\n\nThe image will be stored in:\n- GCP bucket (production)\n- Local directory (development)\n\nReturns the file path and public URL for the uploaded image.",
+          "operationId": "upload_image_api_images_upload_post",
+          "requestBody": {
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "$ref": "#/components/schemas/Body_upload_image_api_images_upload_post"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/images/upload-base64": {
+        "post": {
+          "tags": [
+            "Images",
+            "images"
+          ],
+          "summary": "Upload Base64 Image",
+          "description": "Upload a base64 encoded image.\n\nThis endpoint is useful for receiving images from the ElectronJS application\nthat sends screenshots as base64 data.",
+          "operationId": "upload_base64_image_api_images_upload_base64_post",
+          "requestBody": {
+            "content": {
+              "application/x-www-form-urlencoded": {
+                "schema": {
+                  "$ref": "#/components/schemas/Body_upload_base64_image_api_images_upload_base64_post"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/images/{file_path}": {
+        "delete": {
+          "tags": [
+            "Images",
+            "images"
+          ],
+          "summary": "Delete Image",
+          "description": "Delete an image by its file path.\n\nThis endpoint allows users to delete images they've uploaded.",
+          "operationId": "delete_image_api_images__file_path__delete",
+          "parameters": [
+            {
+              "name": "file_path",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "File Path"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/images/url/{file_path}": {
+        "get": {
+          "tags": [
+            "Images",
+            "images"
+          ],
+          "summary": "Get Image Url",
+          "description": "Get the public URL for an image by its file path.\n\nThis endpoint returns the public URL that can be used to access the image.",
+          "operationId": "get_image_url_api_images_url__file_path__get",
+          "parameters": [
+            {
+              "name": "file_path",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "string",
+                "title": "File Path"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/projects/": {
+        "get": {
+          "tags": [
+            "Projects",
+            "projects"
+          ],
+          "summary": "Get Projects",
+          "description": "Get all projects for the current user.",
+          "operationId": "get_projects_api_projects__get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "items": {
+                      "$ref": "#/components/schemas/ProjectResponse"
+                    },
+                    "type": "array",
+                    "title": "Response Get Projects Api Projects  Get"
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ]
+        },
+        "post": {
+          "tags": [
+            "Projects",
+            "projects"
+          ],
+          "summary": "Create Project",
+          "description": "Create a new project for the current user.",
+          "operationId": "create_project_api_projects__post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectCreate"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "201": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProjectResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          },
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ]
+        }
+      },
+      "/api/projects/{project_id}": {
+        "get": {
+          "tags": [
+            "Projects",
+            "projects"
+          ],
+          "summary": "Get Project",
+          "description": "Get a specific project by ID.",
+          "operationId": "get_project_api_projects__project_id__get",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "project_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Project Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProjectResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "put": {
+          "tags": [
+            "Projects",
+            "projects"
+          ],
+          "summary": "Update Project",
+          "description": "Update a project.",
+          "operationId": "update_project_api_projects__project_id__put",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "project_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Project Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectUpdate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ProjectResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "Projects",
+            "projects"
+          ],
+          "summary": "Delete Project",
+          "description": "Delete a project.",
+          "operationId": "delete_project_api_projects__project_id__delete",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "project_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Project Id"
+              }
+            }
+          ],
+          "responses": {
+            "204": {
+              "description": "Successful Response"
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/test-suites/": {
+        "post": {
+          "tags": [
+            "Test Suites",
+            "test-suites"
+          ],
+          "summary": "Create Test Suite",
+          "description": "Create a new test suite for a project.",
+          "operationId": "create_test_suite_api_test_suites__post",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestSuiteCreate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "201": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/TestSuiteResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "Test Suites",
+            "test-suites"
+          ],
+          "summary": "Get Test Suites",
+          "description": "Get test suites. If project_id is provided, get test suites for that project.",
+          "operationId": "get_test_suites_api_test_suites__get",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "project_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "title": "Project Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/TestSuiteResponse"
+                    },
+                    "title": "Response Get Test Suites Api Test Suites  Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/test-suites/{test_suite_id}": {
+        "get": {
+          "tags": [
+            "Test Suites",
+            "test-suites"
+          ],
+          "summary": "Get Test Suite",
+          "description": "Get a specific test suite by ID.",
+          "operationId": "get_test_suite_api_test_suites__test_suite_id__get",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "test_suite_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Test Suite Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/TestSuiteResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "put": {
+          "tags": [
+            "Test Suites",
+            "test-suites"
+          ],
+          "summary": "Update Test Suite",
+          "description": "Update a test suite.",
+          "operationId": "update_test_suite_api_test_suites__test_suite_id__put",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "test_suite_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Test Suite Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestSuiteUpdate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/TestSuiteResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "Test Suites",
+            "test-suites"
+          ],
+          "summary": "Delete Test Suite",
+          "description": "Delete a test suite.",
+          "operationId": "delete_test_suite_api_test_suites__test_suite_id__delete",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "test_suite_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Test Suite Id"
+              }
+            }
+          ],
+          "responses": {
+            "204": {
+              "description": "Successful Response"
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/test-suites/{test_suite_id}/reset-context": {
+        "post": {
+          "tags": [
+            "Test Suites",
+            "test-suites"
+          ],
+          "summary": "Reset Test Suite Context",
+          "operationId": "reset_test_suite_context_api_test_suites__test_suite_id__reset_context_post",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "test_suite_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Test Suite Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/test-suites/{test_suite_id}/attachments": {
+        "post": {
+          "tags": [
+            "Test Suites",
+            "test-suites"
+          ],
+          "summary": "Upload Test Suite Attachments",
+          "operationId": "upload_test_suite_attachments_api_test_suites__test_suite_id__attachments_post",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "test_suite_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Test Suite Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "multipart/form-data": {
+                "schema": {
+                  "$ref": "#/components/schemas/Body_upload_test_suite_attachments_api_test_suites__test_suite_id__attachments_post"
+                }
+              }
+            }
+          },
+          "responses": {
+            "201": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/TestSuiteAttachmentResponse"
+                    },
+                    "title": "Response Upload Test Suite Attachments Api Test Suites  Test Suite Id  Attachments Post"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "Test Suites",
+            "test-suites"
+          ],
+          "summary": "List Test Suite Attachments",
+          "operationId": "list_test_suite_attachments_api_test_suites__test_suite_id__attachments_get",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "test_suite_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Test Suite Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/TestSuiteAttachmentResponse"
+                    },
+                    "title": "Response List Test Suite Attachments Api Test Suites  Test Suite Id  Attachments Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/test-suites/{test_suite_id}/attachments/{attachment_id}": {
+        "delete": {
+          "tags": [
+            "Test Suites",
+            "test-suites"
+          ],
+          "summary": "Delete Test Suite Attachment",
+          "operationId": "delete_test_suite_attachment_api_test_suites__test_suite_id__attachments__attachment_id__delete",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "test_suite_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Test Suite Id"
+              }
+            },
+            {
+              "name": "attachment_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Attachment Id"
+              }
+            }
+          ],
+          "responses": {
+            "204": {
+              "description": "Successful Response"
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/scenarios/": {
+        "post": {
+          "tags": [
+            "Scenarios",
+            "scenarios"
+          ],
+          "summary": "Create Scenario",
+          "description": "Create a new scenario for a test suite.",
+          "operationId": "create_scenario_api_scenarios__post",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioCreate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "201": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ScenarioResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "Scenarios",
+            "scenarios"
+          ],
+          "summary": "Get Scenarios",
+          "description": "Get scenarios. If test_suite_id is provided, get scenarios for that test suite.",
+          "operationId": "get_scenarios_api_scenarios__get",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "test_suite_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "title": "Test Suite Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ScenarioResponse"
+                    },
+                    "title": "Response Get Scenarios Api Scenarios  Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/scenarios/{scenario_id}": {
+        "get": {
+          "tags": [
+            "Scenarios",
+            "scenarios"
+          ],
+          "summary": "Get Scenario",
+          "description": "Get a specific scenario by ID.",
+          "operationId": "get_scenario_api_scenarios__scenario_id__get",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "scenario_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Scenario Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ScenarioResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "put": {
+          "tags": [
+            "Scenarios",
+            "scenarios"
+          ],
+          "summary": "Update Scenario",
+          "description": "Update a scenario.",
+          "operationId": "update_scenario_api_scenarios__scenario_id__put",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "scenario_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Scenario Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioUpdate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ScenarioResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "Scenarios",
+            "scenarios"
+          ],
+          "summary": "Delete Scenario",
+          "description": "Delete a scenario.",
+          "operationId": "delete_scenario_api_scenarios__scenario_id__delete",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "scenario_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Scenario Id"
+              }
+            }
+          ],
+          "responses": {
+            "204": {
+              "description": "Successful Response"
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/test-runs/": {
+        "post": {
+          "tags": [
+            "Test Runs",
+            "test-runs"
+          ],
+          "summary": "Create Test Run",
+          "description": "Create a new test run.\n\nUse this endpoint when:\n- Running a single scenario: run_type='single', total_scenarios=1\n- Running multiple scenarios (Run All): run_type='batch', total_scenarios=N\n\nThis allows tracking whether a scenario execution was part of a batch or standalone.",
+          "operationId": "create_test_run_api_test_runs__post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestRunCreate"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "201": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/TestRunResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/test-runs/{test_run_id}": {
+        "get": {
+          "tags": [
+            "Test Runs",
+            "test-runs"
+          ],
+          "summary": "Get Test Run",
+          "description": "Get a test run by ID with its associated sessions.",
+          "operationId": "get_test_run_api_test_runs__test_run_id__get",
+          "parameters": [
+            {
+              "name": "test_run_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Test Run Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/TestRunWithSessionsResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "patch": {
+          "tags": [
+            "Test Runs",
+            "test-runs"
+          ],
+          "summary": "Update Test Run",
+          "description": "Update a test run (e.g., mark as completed, update stats).",
+          "operationId": "update_test_run_api_test_runs__test_run_id__patch",
+          "parameters": [
+            {
+              "name": "test_run_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Test Run Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestRunUpdate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/TestRunResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "Test Runs",
+            "test-runs"
+          ],
+          "summary": "Delete Test Run",
+          "description": "Delete a test run and all its associated sessions.",
+          "operationId": "delete_test_run_api_test_runs__test_run_id__delete",
+          "parameters": [
+            {
+              "name": "test_run_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Test Run Id"
+              }
+            }
+          ],
+          "responses": {
+            "204": {
+              "description": "Successful Response"
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/test-runs/suite/{test_suite_id}/runs": {
+        "get": {
+          "tags": [
+            "Test Runs",
+            "test-runs"
+          ],
+          "summary": "Get Test Runs For Suite",
+          "description": "Get all test runs for a specific test suite, ordered by most recent.",
+          "operationId": "get_test_runs_for_suite_api_test_runs_suite__test_suite_id__runs_get",
+          "parameters": [
+            {
+              "name": "test_suite_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Test Suite Id"
+              }
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "default": 50,
+                "title": "Limit"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/TestRunResponse"
+                    },
+                    "title": "Response Get Test Runs For Suite Api Test Runs Suite  Test Suite Id  Runs Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/test-runs/suite/{test_suite_id}/latest": {
+        "get": {
+          "tags": [
+            "Test Runs",
+            "test-runs"
+          ],
+          "summary": "Get Latest Test Run",
+          "description": "Get the most recent test run for a test suite.",
+          "operationId": "get_latest_test_run_api_test_runs_suite__test_suite_id__latest_get",
+          "parameters": [
+            {
+              "name": "test_suite_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Test Suite Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/components/schemas/TestRunResponse"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Response Get Latest Test Run Api Test Runs Suite  Test Suite Id  Latest Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/test-runs/cleanup-stuck-runs": {
+        "post": {
+          "tags": [
+            "Test Runs",
+            "test-runs"
+          ],
+          "summary": "Cleanup Stuck Runs",
+          "description": "Mark all 'running' test runs older than 1 hour as 'failed'.",
+          "operationId": "cleanup_stuck_runs_api_test_runs_cleanup_stuck_runs_post",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "additionalProperties": true,
+                    "type": "object",
+                    "title": "Response Cleanup Stuck Runs Api Test Runs Cleanup Stuck Runs Post"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/scenario-generation/generate": {
+        "post": {
+          "tags": [
+            "Scenario Generation",
+            "scenario-generation"
+          ],
+          "summary": "Generate Scenarios",
+          "description": "Generate test scenarios using Gemini 2.5 Flash.\nThis endpoint uses gemini-2.5-flash (not computer use) to generate text scenarios.",
+          "operationId": "generate_scenarios_api_scenario_generation_generate_post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioGenerationRequest"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ScenarioGenerationResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/secrets/": {
+        "get": {
+          "tags": [
+            "Secrets",
+            "secrets"
+          ],
+          "summary": "Get Secrets",
+          "description": "Get all secrets for the current user (values are masked).",
+          "operationId": "get_secrets_api_secrets__get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "items": {
+                      "$ref": "#/components/schemas/SecretResponse"
+                    },
+                    "type": "array",
+                    "title": "Response Get Secrets Api Secrets  Get"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "post": {
+          "tags": [
+            "Secrets",
+            "secrets"
+          ],
+          "summary": "Create Secret",
+          "description": "Create a new secret.",
+          "operationId": "create_secret_api_secrets__post",
+          "requestBody": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretCreate"
+                }
+              }
+            },
+            "required": true
+          },
+          "responses": {
+            "201": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SecretResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/secrets/{secret_id}": {
+        "get": {
+          "tags": [
+            "Secrets",
+            "secrets"
+          ],
+          "summary": "Get Secret",
+          "description": "Get a specific secret (value is masked).",
+          "operationId": "get_secret_api_secrets__secret_id__get",
+          "parameters": [
+            {
+              "name": "secret_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Secret Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SecretResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "patch": {
+          "tags": [
+            "Secrets",
+            "secrets"
+          ],
+          "summary": "Update Secret",
+          "description": "Update a secret.",
+          "operationId": "update_secret_api_secrets__secret_id__patch",
+          "parameters": [
+            {
+              "name": "secret_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Secret Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretUpdate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/SecretResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "Secrets",
+            "secrets"
+          ],
+          "summary": "Delete Secret",
+          "description": "Delete a secret.",
+          "operationId": "delete_secret_api_secrets__secret_id__delete",
+          "parameters": [
+            {
+              "name": "secret_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Secret Id"
+              }
+            }
+          ],
+          "responses": {
+            "204": {
+              "description": "Successful Response"
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/secrets/{secret_id}/reveal": {
+        "get": {
+          "tags": [
+            "Secrets",
+            "secrets"
+          ],
+          "summary": "Reveal Secret",
+          "description": "Reveal the actual value of a secret (use with caution).",
+          "operationId": "reveal_secret_api_secrets__secret_id__reveal_get",
+          "parameters": [
+            {
+              "name": "secret_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Secret Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "object",
+                    "additionalProperties": true,
+                    "title": "Response Reveal Secret Api Secrets  Secret Id  Reveal Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/dashboard/statistics": {
+        "get": {
+          "tags": [
+            "Dashboard",
+            "dashboard"
+          ],
+          "summary": "Get Dashboard Statistics",
+          "description": "Get dashboard statistics for the current user.\n\nReturns:\n- total_test_runs: Total number of test runs\n- passed_scenarios: Total number of passed scenarios\n- failed_scenarios: Total number of failed scenarios\n- success_rate: Overall success rate percentage",
+          "operationId": "get_dashboard_statistics_api_dashboard_statistics_get",
+          "parameters": [
+            {
+              "name": "project_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Filter by project ID",
+                "title": "Project Id"
+              },
+              "description": "Filter by project ID"
+            },
+            {
+              "name": "start_date",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Start date (ISO format)",
+                "title": "Start Date"
+              },
+              "description": "Start date (ISO format)"
+            },
+            {
+              "name": "end_date",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "End date (ISO format)",
+                "title": "End Date"
+              },
+              "description": "End date (ISO format)"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/dashboard/recent-runs": {
+        "get": {
+          "tags": [
+            "Dashboard",
+            "dashboard"
+          ],
+          "summary": "Get Recent Test Runs",
+          "description": "Get recent test runs for the dashboard.",
+          "operationId": "get_recent_test_runs_api_dashboard_recent_runs_get",
+          "parameters": [
+            {
+              "name": "project_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Filter by project ID",
+                "title": "Project Id"
+              },
+              "description": "Filter by project ID"
+            },
+            {
+              "name": "limit",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "integer",
+                "maximum": 50,
+                "minimum": 1,
+                "description": "Number of recent runs to return",
+                "default": 10,
+                "title": "Limit"
+              },
+              "description": "Number of recent runs to return"
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/schedules/": {
+        "post": {
+          "tags": [
+            "Schedules",
+            "schedules"
+          ],
+          "summary": "Create Schedule",
+          "operationId": "create_schedule_api_schedules__post",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleCreate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "201": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ScheduleResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "get": {
+          "tags": [
+            "Schedules",
+            "schedules"
+          ],
+          "summary": "List Schedules",
+          "operationId": "list_schedules_api_schedules__get",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "project_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Project Id"
+              }
+            },
+            {
+              "name": "test_suite_id",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Test Suite Id"
+              }
+            },
+            {
+              "name": "is_active",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Is Active"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ScheduleResponse"
+                    },
+                    "title": "Response List Schedules Api Schedules  Get"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/schedules/{schedule_id}": {
+        "get": {
+          "tags": [
+            "Schedules",
+            "schedules"
+          ],
+          "summary": "Get Schedule",
+          "operationId": "get_schedule_api_schedules__schedule_id__get",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "schedule_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Schedule Id"
+              }
+            }
+          ],
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ScheduleResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "put": {
+          "tags": [
+            "Schedules",
+            "schedules"
+          ],
+          "summary": "Update Schedule",
+          "operationId": "update_schedule_api_schedules__schedule_id__put",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "schedule_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Schedule Id"
+              }
+            }
+          ],
+          "requestBody": {
+            "required": true,
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleUpdate"
+                }
+              }
+            }
+          },
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/ScheduleResponse"
+                  }
+                }
+              }
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete": {
+          "tags": [
+            "Schedules",
+            "schedules"
+          ],
+          "summary": "Delete Schedule",
+          "operationId": "delete_schedule_api_schedules__schedule_id__delete",
+          "security": [
+            {
+              "HTTPBearer": []
+            }
+          ],
+          "parameters": [
+            {
+              "name": "schedule_id",
+              "in": "path",
+              "required": true,
+              "schema": {
+                "type": "integer",
+                "title": "Schedule Id"
+              }
+            },
+            {
+              "name": "hard",
+              "in": "query",
+              "required": false,
+              "schema": {
+                "type": "boolean",
+                "description": "Set true to permanently delete the schedule.",
+                "default": false,
+                "title": "Hard"
+              },
+              "description": "Set true to permanently delete the schedule."
+            }
+          ],
+          "responses": {
+            "204": {
+              "description": "Successful Response"
+            },
+            "422": {
+              "description": "Validation Error",
+              "content": {
+                "application/json": {
+                  "schema": {
+                    "$ref": "#/components/schemas/HTTPValidationError"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "/api/debug/test-logs": {
+        "get": {
+          "summary": "Test Logs",
+          "description": "Test endpoint to verify logging is working in development",
+          "operationId": "test_logs_api_debug_test_logs_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/": {
+        "get": {
+          "summary": "Root",
+          "description": "Root endpoint",
+          "operationId": "root__get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      },
+      "/health": {
+        "get": {
+          "summary": "Health Check",
+          "description": "Health check endpoint",
+          "operationId": "health_check_health_get",
+          "responses": {
+            "200": {
+              "description": "Successful Response",
+              "content": {
+                "application/json": {
+                  "schema": {}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "components": {
+      "schemas": {
+        "ActionSchema": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "args": {
+              "additionalProperties": true,
+              "type": "object",
+              "title": "Args"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name",
+            "args"
+          ],
+          "title": "ActionSchema",
+          "description": "Schema for a single action to execute."
+        },
+        "Body_upload_base64_image_api_images_upload_base64_post": {
+          "properties": {
+            "image_data": {
+              "type": "string",
+              "title": "Image Data"
+            },
+            "filename": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filename"
+            },
+            "content_type": {
+              "type": "string",
+              "title": "Content Type",
+              "default": "image/png"
+            }
+          },
+          "type": "object",
+          "required": [
+            "image_data"
+          ],
+          "title": "Body_upload_base64_image_api_images_upload_base64_post"
+        },
+        "Body_upload_image_api_images_upload_post": {
+          "properties": {
+            "file": {
+              "type": "string",
+              "format": "binary",
+              "title": "File"
+            }
+          },
+          "type": "object",
+          "required": [
+            "file"
+          ],
+          "title": "Body_upload_image_api_images_upload_post"
+        },
+        "Body_upload_test_suite_attachments_api_test_suites__test_suite_id__attachments_post": {
+          "properties": {
+            "files": {
+              "items": {
+                "type": "string",
+                "format": "binary"
+              },
+              "type": "array",
+              "title": "Files"
+            }
+          },
+          "type": "object",
+          "required": [
+            "files"
+          ],
+          "title": "Body_upload_test_suite_attachments_api_test_suites__test_suite_id__attachments_post"
+        },
+        "ExplorationActionSchema": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "args": {
+              "additionalProperties": true,
+              "type": "object",
+              "title": "Args"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "title": "ExplorationActionSchema"
+        },
+        "ExplorationActionsRequest": {
+          "properties": {
+            "screenshot_base64": {
+              "type": "string",
+              "title": "Screenshot Base64"
+            },
+            "current_url": {
+              "type": "string",
+              "title": "Current Url"
+            },
+            "max_actions": {
+              "type": "integer",
+              "maximum": 5,
+              "minimum": 1,
+              "title": "Max Actions",
+              "default": 3
+            },
+            "guidance": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Guidance"
+            }
+          },
+          "type": "object",
+          "required": [
+            "screenshot_base64",
+            "current_url"
+          ],
+          "title": "ExplorationActionsRequest"
+        },
+        "ExplorationActionsResponse": {
+          "properties": {
+            "actions": {
+              "items": {
+                "$ref": "#/components/schemas/ExplorationActionSchema"
+              },
+              "type": "array",
+              "title": "Actions"
+            }
+          },
+          "type": "object",
+          "required": [
+            "actions"
+          ],
+          "title": "ExplorationActionsResponse"
+        },
+        "HTTPValidationError": {
+          "properties": {
+            "detail": {
+              "items": {
+                "$ref": "#/components/schemas/ValidationError"
+              },
+              "type": "array",
+              "title": "Detail"
+            }
+          },
+          "type": "object",
+          "title": "HTTPValidationError"
+        },
+        "PasswordChange": {
+          "properties": {
+            "current_password": {
+              "type": "string",
+              "title": "Current Password"
+            },
+            "new_password": {
+              "type": "string",
+              "title": "New Password"
+            }
+          },
+          "type": "object",
+          "required": [
+            "current_password",
+            "new_password"
+          ],
+          "title": "PasswordChange"
+        },
+        "ProjectCreate": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name"
+          ],
+          "title": "ProjectCreate"
+        },
+        "ProjectResponse": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            },
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "user_id": {
+              "type": "integer",
+              "title": "User Id"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Created At"
+            },
+            "updated_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated At"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name",
+            "id",
+            "user_id",
+            "created_at"
+          ],
+          "title": "ProjectResponse"
+        },
+        "ProjectUpdate": {
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            }
+          },
+          "type": "object",
+          "title": "ProjectUpdate"
+        },
+        "ScenarioCreate": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            },
+            "test_suite_id": {
+              "type": "integer",
+              "title": "Test Suite Id"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name",
+            "test_suite_id"
+          ],
+          "title": "ScenarioCreate"
+        },
+        "ScenarioGenerationRequest": {
+          "properties": {
+            "test_suite_id": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Test Suite Id"
+            },
+            "test_suite_name": {
+              "type": "string",
+              "title": "Test Suite Name"
+            },
+            "application_url": {
+              "type": "string",
+              "title": "Application Url"
+            },
+            "test_description": {
+              "type": "string",
+              "title": "Test Description"
+            },
+            "ai_testing_instructions": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ai Testing Instructions"
+            },
+            "setup_instructions": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Setup Instructions"
+            },
+            "setup_screenshot_base64": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Setup Screenshot Base64"
+            },
+            "setup_final_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Setup Final Url"
+            },
+            "exploration_screenshots_base64": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exploration Screenshots Base64"
+            }
+          },
+          "type": "object",
+          "required": [
+            "test_suite_name",
+            "application_url",
+            "test_description"
+          ],
+          "title": "ScenarioGenerationRequest"
+        },
+        "ScenarioGenerationResponse": {
+          "properties": {
+            "scenarios": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array",
+              "title": "Scenarios"
+            }
+          },
+          "type": "object",
+          "required": [
+            "scenarios"
+          ],
+          "title": "ScenarioGenerationResponse"
+        },
+        "ScenarioResponse": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            },
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "test_suite_id": {
+              "type": "integer",
+              "title": "Test Suite Id"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Created At"
+            },
+            "updated_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated At"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name",
+            "id",
+            "test_suite_id",
+            "created_at"
+          ],
+          "title": "ScenarioResponse"
+        },
+        "ScenarioUpdate": {
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            }
+          },
+          "type": "object",
+          "title": "ScenarioUpdate"
+        },
+        "ScheduleCreate": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "maxLength": 255,
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            },
+            "project_id": {
+              "type": "integer",
+              "title": "Project Id"
+            },
+            "test_suite_id": {
+              "type": "integer",
+              "title": "Test Suite Id"
+            },
+            "frequency": {
+              "$ref": "#/components/schemas/ScheduleFrequency"
+            },
+            "time_of_day": {
+              "type": "string",
+              "title": "Time Of Day"
+            },
+            "timezone": {
+              "type": "string",
+              "title": "Timezone",
+              "default": "UTC"
+            },
+            "days_of_week": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Days Of Week"
+            },
+            "day_of_month": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day Of Month"
+            },
+            "start_date": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Date"
+            },
+            "end_date": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Date"
+            },
+            "is_active": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Active",
+              "default": true
+            }
+          },
+          "type": "object",
+          "required": [
+            "name",
+            "project_id",
+            "test_suite_id",
+            "frequency",
+            "time_of_day"
+          ],
+          "title": "ScheduleCreate"
+        },
+        "ScheduleFrequency": {
+          "type": "string",
+          "enum": [
+            "daily",
+            "weekly",
+            "monthly"
+          ],
+          "title": "ScheduleFrequency"
+        },
+        "ScheduleResponse": {
+          "properties": {
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "project_id": {
+              "type": "integer",
+              "title": "Project Id"
+            },
+            "test_suite_id": {
+              "type": "integer",
+              "title": "Test Suite Id"
+            },
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            },
+            "frequency": {
+              "$ref": "#/components/schemas/ScheduleFrequency"
+            },
+            "time_of_day": {
+              "type": "string",
+              "title": "Time Of Day"
+            },
+            "timezone": {
+              "type": "string",
+              "title": "Timezone"
+            },
+            "days_of_week": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Days Of Week"
+            },
+            "day_of_month": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day Of Month"
+            },
+            "start_date": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Date"
+            },
+            "end_date": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Date"
+            },
+            "is_active": {
+              "type": "boolean",
+              "title": "Is Active"
+            },
+            "last_run_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last Run At"
+            },
+            "next_run_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Next Run At"
+            },
+            "created_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Created At"
+            },
+            "updated_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated At"
+            },
+            "test_suite": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ScheduleSuiteSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "type": "object",
+          "required": [
+            "id",
+            "project_id",
+            "test_suite_id",
+            "name",
+            "description",
+            "frequency",
+            "time_of_day",
+            "timezone",
+            "days_of_week",
+            "day_of_month",
+            "start_date",
+            "end_date",
+            "is_active",
+            "last_run_at",
+            "next_run_at",
+            "created_at",
+            "updated_at",
+            "test_suite"
+          ],
+          "title": "ScheduleResponse"
+        },
+        "ScheduleSuiteSummary": {
+          "properties": {
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "project_id": {
+              "type": "integer",
+              "title": "Project Id"
+            }
+          },
+          "type": "object",
+          "required": [
+            "id",
+            "name",
+            "project_id"
+          ],
+          "title": "ScheduleSuiteSummary"
+        },
+        "ScheduleUpdate": {
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 255
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            },
+            "project_id": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            },
+            "test_suite_id": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Test Suite Id"
+            },
+            "frequency": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ScheduleFrequency"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "time_of_day": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Time Of Day"
+            },
+            "timezone": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Timezone"
+            },
+            "days_of_week": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Days Of Week"
+            },
+            "day_of_month": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Day Of Month"
+            },
+            "start_date": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start Date"
+            },
+            "end_date": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End Date"
+            },
+            "is_active": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Active"
+            }
+          },
+          "type": "object",
+          "title": "ScheduleUpdate"
+        },
+        "SecretCreate": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "value": {
+              "type": "string",
+              "title": "Value"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name",
+            "value"
+          ],
+          "title": "SecretCreate",
+          "description": "Schema for creating a new secret."
+        },
+        "SecretResponse": {
+          "properties": {
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "value_masked": {
+              "type": "string",
+              "title": "Value Masked"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Created At"
+            },
+            "updated_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated At"
+            }
+          },
+          "type": "object",
+          "required": [
+            "id",
+            "name",
+            "value_masked",
+            "created_at"
+          ],
+          "title": "SecretResponse",
+          "description": "Schema for secret response (value is masked)."
+        },
+        "SecretUpdate": {
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            },
+            "value": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Value"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            }
+          },
+          "type": "object",
+          "title": "SecretUpdate",
+          "description": "Schema for updating a secret."
+        },
+        "SessionCreateRequest": {
+          "properties": {
+            "query": {
+              "type": "string",
+              "title": "Query"
+            },
+            "model_name": {
+              "type": "string",
+              "title": "Model Name",
+              "default": "gemini-2.5-computer-use-preview-10-2025"
+            },
+            "initial_url": {
+              "type": "string",
+              "title": "Initial Url",
+              "default": "https://www.google.com"
+            },
+            "screen_size": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array",
+              "maxItems": 2,
+              "minItems": 2,
+              "title": "Screen Size",
+              "default": [
+                1440,
+                900
+              ]
+            },
+            "test_run_id": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Test Run Id"
+            },
+            "scenario_id": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scenario Id"
+            }
+          },
+          "type": "object",
+          "required": [
+            "query"
+          ],
+          "title": "SessionCreateRequest",
+          "description": "Request to create a new agent session."
+        },
+        "SessionCreateResponse": {
+          "properties": {
+            "session_uuid": {
+              "type": "string",
+              "title": "Session Uuid"
+            },
+            "session_id": {
+              "type": "integer",
+              "title": "Session Id"
+            },
+            "status": {
+              "type": "string",
+              "title": "Status"
+            },
+            "message": {
+              "type": "string",
+              "title": "Message"
+            }
+          },
+          "type": "object",
+          "required": [
+            "session_uuid",
+            "session_id",
+            "status",
+            "message"
+          ],
+          "title": "SessionCreateResponse",
+          "description": "Response after creating a session."
+        },
+        "SessionHistoryResponse": {
+          "properties": {
+            "session_uuid": {
+              "type": "string",
+              "title": "Session Uuid"
+            },
+            "query": {
+              "type": "string",
+              "title": "Query"
+            },
+            "status": {
+              "type": "string",
+              "title": "Status"
+            },
+            "steps": {
+              "items": {
+                "$ref": "#/components/schemas/StepHistorySchema"
+              },
+              "type": "array",
+              "title": "Steps"
+            },
+            "final_reasoning": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Final Reasoning"
+            }
+          },
+          "type": "object",
+          "required": [
+            "session_uuid",
+            "query",
+            "status",
+            "steps"
+          ],
+          "title": "SessionHistoryResponse",
+          "description": "Complete history of a session."
+        },
+        "SessionStatusResponse": {
+          "properties": {
+            "session_uuid": {
+              "type": "string",
+              "title": "Session Uuid"
+            },
+            "status": {
+              "type": "string",
+              "title": "Status"
+            },
+            "step_count": {
+              "type": "integer",
+              "title": "Step Count"
+            },
+            "final_reasoning": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Final Reasoning"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Created At"
+            },
+            "updated_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated At"
+            }
+          },
+          "type": "object",
+          "required": [
+            "session_uuid",
+            "status",
+            "step_count",
+            "created_at"
+          ],
+          "title": "SessionStatusResponse",
+          "description": "Current status of a session."
+        },
+        "StepExecuteRequest": {
+          "properties": {
+            "screenshot_base64": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Screenshot Base64"
+            },
+            "screenshot_path": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Screenshot Path"
+            },
+            "current_url": {
+              "type": "string",
+              "title": "Current Url"
+            },
+            "context": {
+              "additionalProperties": true,
+              "type": "object",
+              "title": "Context",
+              "default": {}
+            }
+          },
+          "type": "object",
+          "required": [
+            "current_url"
+          ],
+          "title": "StepExecuteRequest",
+          "description": "Request to execute the next step in the agent workflow."
+        },
+        "StepExecuteResponse": {
+          "properties": {
+            "step_id": {
+              "type": "integer",
+              "title": "Step Id"
+            },
+            "step_number": {
+              "type": "integer",
+              "title": "Step Number"
+            },
+            "reasoning": {
+              "type": "string",
+              "title": "Reasoning"
+            },
+            "actions": {
+              "items": {
+                "$ref": "#/components/schemas/ActionSchema"
+              },
+              "type": "array",
+              "title": "Actions"
+            },
+            "status": {
+              "type": "string",
+              "title": "Status"
+            },
+            "final_reasoning": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Final Reasoning"
+            }
+          },
+          "type": "object",
+          "required": [
+            "step_id",
+            "step_number",
+            "reasoning",
+            "actions",
+            "status"
+          ],
+          "title": "StepExecuteResponse",
+          "description": "Response containing the next step to execute."
+        },
+        "StepHistorySchema": {
+          "properties": {
+            "step_number": {
+              "type": "integer",
+              "title": "Step Number"
+            },
+            "reasoning": {
+              "type": "string",
+              "title": "Reasoning"
+            },
+            "status": {
+              "type": "string",
+              "title": "Status"
+            },
+            "actions": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array",
+              "title": "Actions"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Created At"
+            }
+          },
+          "type": "object",
+          "required": [
+            "step_number",
+            "reasoning",
+            "status",
+            "actions",
+            "created_at"
+          ],
+          "title": "StepHistorySchema",
+          "description": "Historical record of a single step."
+        },
+        "TestRunCreate": {
+          "properties": {
+            "test_suite_id": {
+              "type": "integer",
+              "title": "Test Suite Id"
+            },
+            "run_type": {
+              "type": "string",
+              "title": "Run Type"
+            },
+            "total_scenarios": {
+              "type": "integer",
+              "title": "Total Scenarios",
+              "default": 1
+            }
+          },
+          "type": "object",
+          "required": [
+            "test_suite_id",
+            "run_type"
+          ],
+          "title": "TestRunCreate",
+          "description": "Request to create a new test run."
+        },
+        "TestRunResponse": {
+          "properties": {
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "test_suite_id": {
+              "type": "integer",
+              "title": "Test Suite Id"
+            },
+            "user_id": {
+              "type": "integer",
+              "title": "User Id"
+            },
+            "run_type": {
+              "type": "string",
+              "title": "Run Type"
+            },
+            "status": {
+              "type": "string",
+              "title": "Status"
+            },
+            "total_scenarios": {
+              "type": "integer",
+              "title": "Total Scenarios"
+            },
+            "passed_scenarios": {
+              "type": "integer",
+              "title": "Passed Scenarios"
+            },
+            "failed_scenarios": {
+              "type": "integer",
+              "title": "Failed Scenarios"
+            },
+            "started_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Started At"
+            },
+            "completed_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Completed At"
+            }
+          },
+          "type": "object",
+          "required": [
+            "id",
+            "test_suite_id",
+            "user_id",
+            "run_type",
+            "status",
+            "total_scenarios",
+            "passed_scenarios",
+            "failed_scenarios",
+            "started_at"
+          ],
+          "title": "TestRunResponse",
+          "description": "Response containing test run data."
+        },
+        "TestRunUpdate": {
+          "properties": {
+            "status": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            },
+            "passed_scenarios": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Passed Scenarios"
+            },
+            "failed_scenarios": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Failed Scenarios"
+            }
+          },
+          "type": "object",
+          "title": "TestRunUpdate",
+          "description": "Request to update a test run."
+        },
+        "TestRunWithSessionsResponse": {
+          "properties": {
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "test_suite_id": {
+              "type": "integer",
+              "title": "Test Suite Id"
+            },
+            "user_id": {
+              "type": "integer",
+              "title": "User Id"
+            },
+            "run_type": {
+              "type": "string",
+              "title": "Run Type"
+            },
+            "status": {
+              "type": "string",
+              "title": "Status"
+            },
+            "total_scenarios": {
+              "type": "integer",
+              "title": "Total Scenarios"
+            },
+            "passed_scenarios": {
+              "type": "integer",
+              "title": "Passed Scenarios"
+            },
+            "failed_scenarios": {
+              "type": "integer",
+              "title": "Failed Scenarios"
+            },
+            "started_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Started At"
+            },
+            "completed_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Completed At"
+            },
+            "sessions": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array",
+              "title": "Sessions",
+              "default": []
+            }
+          },
+          "type": "object",
+          "required": [
+            "id",
+            "test_suite_id",
+            "user_id",
+            "run_type",
+            "status",
+            "total_scenarios",
+            "passed_scenarios",
+            "failed_scenarios",
+            "started_at"
+          ],
+          "title": "TestRunWithSessionsResponse",
+          "description": "Test run response including linked sessions."
+        },
+        "TestSuiteAttachmentResponse": {
+          "properties": {
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "filename": {
+              "type": "string",
+              "title": "Filename"
+            },
+            "content_type": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Content Type"
+            },
+            "size": {
+              "type": "integer",
+              "title": "Size"
+            },
+            "storage_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Storage Url"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Created At"
+            }
+          },
+          "type": "object",
+          "required": [
+            "id",
+            "filename",
+            "size",
+            "created_at"
+          ],
+          "title": "TestSuiteAttachmentResponse"
+        },
+        "TestSuiteCreate": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            },
+            "application_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Application Url"
+            },
+            "ai_testing_instructions": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ai Testing Instructions"
+            },
+            "resolution": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resolution",
+              "default": "Desktop Standard"
+            },
+            "creation_mode": {
+              "type": "string",
+              "enum": [
+                "manual",
+                "ai"
+              ],
+              "title": "Creation Mode",
+              "default": "manual"
+            },
+            "preconditions_enabled": {
+              "type": "boolean",
+              "title": "Preconditions Enabled",
+              "default": false
+            },
+            "preconditions": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Preconditions"
+            },
+            "has_persistent_context": {
+              "type": "boolean",
+              "title": "Has Persistent Context",
+              "default": false
+            },
+            "exploration_enabled": {
+              "type": "boolean",
+              "title": "Exploration Enabled",
+              "default": false
+            },
+            "exploration_step_limit": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exploration Step Limit"
+            },
+            "project_id": {
+              "type": "integer",
+              "title": "Project Id"
+            }
+          },
+          "type": "object",
+          "required": [
+            "name",
+            "project_id"
+          ],
+          "title": "TestSuiteCreate"
+        },
+        "TestSuiteResponse": {
+          "properties": {
+            "name": {
+              "type": "string",
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            },
+            "application_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Application Url"
+            },
+            "ai_testing_instructions": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ai Testing Instructions"
+            },
+            "resolution": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resolution",
+              "default": "Desktop Standard"
+            },
+            "creation_mode": {
+              "type": "string",
+              "enum": [
+                "manual",
+                "ai"
+              ],
+              "title": "Creation Mode",
+              "default": "manual"
+            },
+            "preconditions_enabled": {
+              "type": "boolean",
+              "title": "Preconditions Enabled",
+              "default": false
+            },
+            "preconditions": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Preconditions"
+            },
+            "has_persistent_context": {
+              "type": "boolean",
+              "title": "Has Persistent Context",
+              "default": false
+            },
+            "exploration_enabled": {
+              "type": "boolean",
+              "title": "Exploration Enabled",
+              "default": false
+            },
+            "exploration_step_limit": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exploration Step Limit"
+            },
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "project_id": {
+              "type": "integer",
+              "title": "Project Id"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Created At"
+            },
+            "updated_at": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Updated At"
+            },
+            "attachments": {
+              "items": {
+                "$ref": "#/components/schemas/TestSuiteAttachmentResponse"
+              },
+              "type": "array",
+              "title": "Attachments",
+              "default": []
+            }
+          },
+          "type": "object",
+          "required": [
+            "name",
+            "id",
+            "project_id",
+            "created_at"
+          ],
+          "title": "TestSuiteResponse"
+        },
+        "TestSuiteUpdate": {
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            },
+            "description": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Description"
+            },
+            "application_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Application Url"
+            },
+            "ai_testing_instructions": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ai Testing Instructions"
+            },
+            "resolution": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Resolution"
+            },
+            "preconditions_enabled": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Preconditions Enabled"
+            },
+            "preconditions": {
+              "anyOf": [
+                {},
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Preconditions"
+            },
+            "has_persistent_context": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Persistent Context"
+            },
+            "exploration_enabled": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exploration Enabled"
+            },
+            "exploration_step_limit": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Exploration Step Limit"
+            }
+          },
+          "type": "object",
+          "title": "TestSuiteUpdate"
+        },
+        "Token": {
+          "properties": {
+            "access_token": {
+              "type": "string",
+              "title": "Access Token"
+            },
+            "refresh_token": {
+              "type": "string",
+              "title": "Refresh Token"
+            },
+            "token_type": {
+              "type": "string",
+              "title": "Token Type",
+              "default": "bearer"
+            }
+          },
+          "type": "object",
+          "required": [
+            "access_token",
+            "refresh_token"
+          ],
+          "title": "Token"
+        },
+        "UserCreate": {
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "title": "Email"
+            },
+            "username": {
+              "type": "string",
+              "title": "Username"
+            },
+            "full_name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Full Name"
+            },
+            "password": {
+              "type": "string",
+              "title": "Password"
+            }
+          },
+          "type": "object",
+          "required": [
+            "email",
+            "username",
+            "password"
+          ],
+          "title": "UserCreate"
+        },
+        "UserLogin": {
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "title": "Email"
+            },
+            "password": {
+              "type": "string",
+              "title": "Password"
+            }
+          },
+          "type": "object",
+          "required": [
+            "email",
+            "password"
+          ],
+          "title": "UserLogin"
+        },
+        "UserResponse": {
+          "properties": {
+            "email": {
+              "type": "string",
+              "format": "email",
+              "title": "Email"
+            },
+            "username": {
+              "type": "string",
+              "title": "Username"
+            },
+            "full_name": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Full Name"
+            },
+            "id": {
+              "type": "integer",
+              "title": "Id"
+            },
+            "is_active": {
+              "type": "boolean",
+              "title": "Is Active"
+            },
+            "is_verified": {
+              "type": "boolean",
+              "title": "Is Verified"
+            },
+            "created_at": {
+              "type": "string",
+              "format": "date-time",
+              "title": "Created At"
+            },
+            "last_login": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last Login"
+            },
+            "bio": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bio"
+            },
+            "avatar_url": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Avatar Url"
+            }
+          },
+          "type": "object",
+          "required": [
+            "email",
+            "username",
+            "id",
+            "is_active",
+            "is_verified",
+            "created_at"
+          ],
+          "title": "UserResponse"
+        },
+        "ValidationError": {
+          "properties": {
+            "loc": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ]
+              },
+              "type": "array",
+              "title": "Location"
+            },
+            "msg": {
+              "type": "string",
+              "title": "Message"
+            },
+            "type": {
+              "type": "string",
+              "title": "Error Type"
+            }
+          },
+          "type": "object",
+          "required": [
+            "loc",
+            "msg",
+            "type"
+          ],
+          "title": "ValidationError"
+        }
+      },
+      "securitySchemes": {
+        "HTTPBearer": {
+          "type": "http",
+          "scheme": "bearer"
+        }
+      }
+    }
+  }
