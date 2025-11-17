@@ -5,6 +5,7 @@ import { Button } from "../../components/ui/button";
 import { CheckCircle, XCircle, Loader2, Filter } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "../../hooks/use-toast";
 import {
   Select,
   SelectContent,
@@ -40,6 +41,7 @@ interface TestRun {
 export const TestRunsPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [testRuns, setTestRuns] = useState<TestRun[]>([]);
   const [suites, setSuites] = useState<TestSuiteResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -75,6 +77,11 @@ export const TestRunsPage: React.FC = () => {
       }
     } catch (error) {
       console.error("Error fetching suites:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load test suites",
+        variant: "destructive",
+      });
       setSuitesLoaded(true);
       setIsLoading(false);
     }
@@ -97,6 +104,11 @@ export const TestRunsPage: React.FC = () => {
         }
         const runs = await getTestRunsForSuite(suiteId).catch(err => {
           console.error("Error fetching test runs for suite:", err);
+          toast({
+            title: "Error",
+            description: err instanceof Error ? err.message : "Failed to load test runs",
+            variant: "destructive",
+          });
           return [];
         });
         allRuns = runs;
@@ -110,6 +122,7 @@ export const TestRunsPage: React.FC = () => {
         const runsPromises = suites.map(suite => 
           getTestRunsForSuite(suite.id).catch(err => {
             console.error(`Error fetching test runs for suite ${suite.id}:`, err);
+            // Don't show toast for each individual error, just log it
             return [];
           })
         );
@@ -165,6 +178,11 @@ export const TestRunsPage: React.FC = () => {
       setTestRuns(filteredRuns);
     } catch (error) {
       console.error("Error fetching test runs:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load test runs",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }

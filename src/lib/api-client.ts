@@ -64,11 +64,33 @@ export const apiRequest = async <T = any>(
   });
   
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({
-      detail: `HTTP ${response.status}: ${response.statusText}`,
-    }));
+    let errorData: any;
+    try {
+      errorData = await response.json();
+    } catch {
+      errorData = {
+        detail: `HTTP ${response.status}: ${response.statusText}`,
+      };
+    }
     
-    throw new Error(errorData.detail || errorData.message || 'API request failed');
+    // Handle HTTPValidationError format from OpenAPI spec
+    if (errorData.detail && Array.isArray(errorData.detail)) {
+      // Validation error with multiple field errors
+      const errorMessages = errorData.detail.map((err: any) => {
+        const field = err.loc?.slice(1).join('.') || 'field';
+        return `${field}: ${err.msg}`;
+      }).join(', ');
+      throw new Error(errorMessages || 'Validation error');
+    }
+    
+    // Handle single detail string or message
+    const errorMessage = errorData.detail || errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+    throw new Error(errorMessage);
+  }
+  
+  // Handle 204 No Content responses
+  if (response.status === 204) {
+    return undefined as T;
   }
   
   return response.json();
@@ -208,6 +230,64 @@ export const apiPatch = <T = any>(endpoint: string, data?: any): Promise<T> => {
 };
 
 // ============================================================================
+// Projects API (Projects = Workspaces)
+// ============================================================================
+
+export interface ProjectResponse {
+  id: number;
+  name: string;
+  description: string | null;
+  user_id: number;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface ProjectCreate {
+  name: string;
+  description?: string | null;
+}
+
+export interface ProjectUpdate {
+  name?: string | null;
+  description?: string | null;
+}
+
+/**
+ * Get all projects for the current user
+ */
+export const getProjects = async (): Promise<ProjectResponse[]> => {
+  return apiGet<ProjectResponse[]>('/api/projects/');
+};
+
+/**
+ * Get a specific project
+ */
+export const getProject = async (projectId: number): Promise<ProjectResponse> => {
+  return apiGet<ProjectResponse>(`/api/projects/${projectId}`);
+};
+
+/**
+ * Create a new project
+ */
+export const createProject = async (data: ProjectCreate): Promise<ProjectResponse> => {
+  return apiPost<ProjectResponse>('/api/projects/', data);
+};
+
+/**
+ * Update a project
+ */
+export const updateProject = async (projectId: number, data: ProjectUpdate): Promise<ProjectResponse> => {
+  return apiPut<ProjectResponse>(`/api/projects/${projectId}`, data);
+};
+
+/**
+ * Delete a project
+ */
+export const deleteProject = async (projectId: number): Promise<void> => {
+  return apiDelete(`/api/projects/${projectId}`);
+};
+
+// ============================================================================
 // Test Suites API
 // ============================================================================
 
@@ -342,11 +422,15 @@ export const getLatestTestRun = async (testSuiteId: number): Promise<TestRunResp
   return apiGet<TestRunResponse | null>(`/api/test-runs/suite/${testSuiteId}/latest`);
 };
 
+export interface TestRunWithSessionsResponse extends TestRunResponse {
+  sessions: any[]; // Sessions array from the API
+}
+
 /**
  * Get a specific test run
  */
-export const getTestRun = async (testRunId: number): Promise<any> => {
-  return apiGet(`/api/test-runs/${testRunId}`);
+export const getTestRun = async (testRunId: number): Promise<TestRunWithSessionsResponse> => {
+  return apiGet<TestRunWithSessionsResponse>(`/api/test-runs/${testRunId}`);
 };
 
 /**
@@ -552,15 +636,18 @@ export interface DashboardStatistics {
   success_rate: number;
 }
 
+// RecentRun matches TestRunResponse structure (recent-runs endpoint returns test runs)
 export interface RecentRun {
   id: number;
   test_suite_id: number;
-  suite_name?: string;
+  user_id: number;
+  run_type: string;
+  status: string;
   total_scenarios: number;
   passed_scenarios: number;
   failed_scenarios: number;
   started_at: string;
-  status: string;
+  completed_at: string | null;
 }
 
 /**
@@ -597,5 +684,76 @@ export const getRecentTestRuns = async (params?: {
     ? `/api/dashboard/recent-runs?${queryParams.toString()}`
     : '/api/dashboard/recent-runs';
   return apiGet<RecentRun[]>(endpoint);
+};
+
+// ============================================================================
+// Secrets API
+// ============================================================================
+
+export interface SecretResponse {
+  id: number;
+  name: string;
+  value_masked: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface SecretCreate {
+  name: string;
+  value: string;
+  description?: string | null;
+}
+
+export interface SecretUpdate {
+  name?: string | null;
+  value?: string | null;
+  description?: string | null;
+}
+
+export interface SecretRevealResponse {
+  value: string;
+}
+
+/**
+ * Get all secrets for the current user
+ */
+export const getSecrets = async (): Promise<SecretResponse[]> => {
+  return apiGet<SecretResponse[]>('/api/secrets/');
+};
+
+/**
+ * Get a specific secret
+ */
+export const getSecret = async (secretId: number): Promise<SecretResponse> => {
+  return apiGet<SecretResponse>(`/api/secrets/${secretId}`);
+};
+
+/**
+ * Create a new secret
+ */
+export const createSecret = async (data: SecretCreate): Promise<SecretResponse> => {
+  return apiPost<SecretResponse>('/api/secrets/', data);
+};
+
+/**
+ * Update a secret
+ */
+export const updateSecret = async (secretId: number, data: SecretUpdate): Promise<SecretResponse> => {
+  return apiPatch<SecretResponse>(`/api/secrets/${secretId}`, data);
+};
+
+/**
+ * Delete a secret
+ */
+export const deleteSecret = async (secretId: number): Promise<void> => {
+  return apiDelete(`/api/secrets/${secretId}`);
+};
+
+/**
+ * Reveal the actual value of a secret
+ */
+export const revealSecret = async (secretId: number): Promise<SecretRevealResponse> => {
+  return apiGet<SecretRevealResponse>(`/api/secrets/${secretId}/reveal`);
 };
 

@@ -30,6 +30,7 @@ import {
   getTestSuite, 
   getScenarios
 } from "../../lib/api-client";
+import { useToast } from "../../hooks/use-toast";
 
 interface Scenario {
   id: string;
@@ -56,6 +57,7 @@ export const TestSuiteRunsPage: React.FC = () => {
   const { suiteId } = useParams<{ suiteId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [selectedStepIndex, setSelectedStepIndex] = useState(0);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -122,6 +124,11 @@ export const TestSuiteRunsPage: React.FC = () => {
       setScenarios(transformedScenarios);
     } catch (error) {
       console.error("Error loading suite data:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load test suite data",
+        variant: "destructive",
+      });
     } finally {
       setIsLoadingData(false);
     }

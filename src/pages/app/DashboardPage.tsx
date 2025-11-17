@@ -22,6 +22,7 @@ import {
   TestSuiteResponse
 } from "../../lib/api-client";
 import { useAuth } from "../../contexts/AuthContext";
+import { useToast } from "../../hooks/use-toast";
 
 interface DashboardStats {
   totalRuns: number;
@@ -60,6 +61,7 @@ interface TrendData {
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [stats, setStats] = useState<DashboardStats>({
     totalRuns: 0,
     passedScenarios: 0,
@@ -93,6 +95,11 @@ export const DashboardPage: React.FC = () => {
       const [statsData, recentRunsData, schedulesData, suitesData] = await Promise.all([
         getDashboardStatistics().catch(err => {
           console.error("Error fetching dashboard statistics:", err);
+          toast({
+            title: "Error",
+            description: err instanceof Error ? err.message : "Failed to load dashboard statistics",
+            variant: "destructive",
+          });
           return {
             total_test_runs: 0,
             passed_scenarios: 0,
@@ -102,14 +109,29 @@ export const DashboardPage: React.FC = () => {
         }),
         getRecentTestRuns({ limit: 10 }).catch(err => {
           console.error("Error fetching recent test runs:", err);
+          toast({
+            title: "Error",
+            description: err instanceof Error ? err.message : "Failed to load recent test runs",
+            variant: "destructive",
+          });
           return [];
         }),
         getSchedules({ is_active: true }).catch(err => {
           console.error("Error fetching schedules:", err);
+          toast({
+            title: "Error",
+            description: err instanceof Error ? err.message : "Failed to load schedules",
+            variant: "destructive",
+          });
           return [];
         }),
         getTestSuites().catch(err => {
           console.error("Error fetching test suites:", err);
+          toast({
+            title: "Error",
+            description: err instanceof Error ? err.message : "Failed to load test suites",
+            variant: "destructive",
+          });
           return [];
         }),
       ]);
@@ -129,22 +151,20 @@ export const DashboardPage: React.FC = () => {
       });
 
       // Transform recent runs - need to get suite names
-      const runsWithSuiteNames = await Promise.all(
-        recentRunsData.map(async (run) => {
-          // Try to find suite name from schedules or test suites
-          const suite = suitesData.find(s => s.id === run.test_suite_id);
-          return {
-            id: run.id.toString(),
-            suite_name: suite?.name || `Suite ${run.test_suite_id}`,
-            total_scenarios: run.total_scenarios,
-            passed_scenarios: run.passed_scenarios,
-            failed_scenarios: run.failed_scenarios,
-            started_at: new Date(run.started_at).toLocaleString(),
-            suite_id: run.test_suite_id.toString(),
-            status: run.status,
-          };
-        })
-      );
+      const runsWithSuiteNames: RecentRun[] = recentRunsData.map((run) => {
+        // Find suite name from test suites data
+        const suite = suitesData.find(s => s.id === run.test_suite_id);
+        return {
+          id: run.id.toString(),
+          suite_name: suite?.name || `Suite ${run.test_suite_id}`,
+          total_scenarios: run.total_scenarios,
+          passed_scenarios: run.passed_scenarios,
+          failed_scenarios: run.failed_scenarios,
+          started_at: new Date(run.started_at).toLocaleString(),
+          suite_id: run.test_suite_id.toString(),
+          status: run.status,
+        };
+      });
       setRecentRuns(runsWithSuiteNames);
 
       // Transform schedules
@@ -172,6 +192,11 @@ export const DashboardPage: React.FC = () => {
       generateTrendData(recentRunsData);
     } catch (error) {
       console.error("Error loading dashboard data:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load dashboard data",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }

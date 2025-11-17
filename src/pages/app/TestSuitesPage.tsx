@@ -5,10 +5,12 @@ import { Button } from "../../components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { getTestSuites, TestSuiteResponse } from "../../lib/api-client";
+import { useToast } from "../../hooks/use-toast";
 
 export const TestSuitesPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [testSuites, setTestSuites] = useState<TestSuiteResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -25,6 +27,11 @@ export const TestSuitesPage: React.FC = () => {
       setTestSuites(suites);
     } catch (error) {
       console.error("Error loading test suites:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load test suites",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
