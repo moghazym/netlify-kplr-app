@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserFromStorage } from '../lib/auth-storage';
@@ -11,6 +11,7 @@ interface ProtectedRouteProps {
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isAuthenticated, loading } = useAuth();
   const location = useLocation();
+  const hasRedirected = useRef(false);
 
   // Check storage directly as a fallback (in case context hasn't updated yet)
   const storageUser = getUserFromStorage();
@@ -26,12 +27,25 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
       hasUserInStorage,
       pathname: location.pathname,
       storageUser,
+      hostname: window.location.hostname,
     });
   }
 
   useEffect(() => {
-    if (!loading && !actuallyAuthenticated) {
-      // Redirect to auth.usekplr.com with current URL as redirect_uri
+    // In development mode, skip auth redirect
+    if (import.meta.env.DEV) {
+      return;
+    }
+
+    // Don't redirect if we're on the callback route (it handles its own auth)
+    if (location.pathname === '/callback') {
+      return;
+    }
+
+    // Only redirect once and only if not authenticated
+    if (!loading && !actuallyAuthenticated && !hasRedirected.current) {
+      hasRedirected.current = true;
+      // Redirect to auth with app URL as redirect_uri
       redirectToAuth(location.pathname);
     }
   }, [loading, actuallyAuthenticated, location.pathname]);
@@ -58,7 +72,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  if (!actuallyAuthenticated) {
+  // In development mode, always allow access (mock user is set in AuthContext)
+  if (!actuallyAuthenticated && !import.meta.env.DEV) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -66,6 +81,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         </div>
       </div>
     );
+  }
+
+  // Reset redirect flag when authenticated
+  if (actuallyAuthenticated && hasRedirected.current) {
+    hasRedirected.current = false;
   }
 
   return <>{children}</>;

@@ -54,20 +54,25 @@ export const isAuthSubdomain = (): boolean => {
 export const getAppBaseUrl = (): string => {
   if (typeof window === 'undefined') return '';
   
-  if (isLocalhost()) {
-    return `http://app.localhost${getPort()}`;
+  const hostname = window.location.hostname;
+  const port = getPort();
+  
+  // In production, use app subdomain
+  if (hostname === 'app.usekplr.com') {
+    return 'https://app.usekplr.com';
   }
   
+  // In development, use localhost (with port)
+  if (isLocalhost()) {
+    return `${window.location.protocol}//${hostname}${port}`;
+  }
+  
+  // Fallback to production app subdomain
   return 'https://app.usekplr.com';
 };
 
 export const getAuthBaseUrl = (): string => {
-  if (typeof window === 'undefined') return '';
-  
-  if (isLocalhost()) {
-    return `http://auth.localhost${getPort()}`;
-  }
-  
+  // Always use production auth service (even in dev)
   return 'https://auth.usekplr.com';
 };
 

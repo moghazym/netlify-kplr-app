@@ -31,9 +31,29 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  // Mock user for development mode
+  const getMockUser = (): User => ({
+    id: 'dev-user-123',
+    name: 'Dev User',
+    email: 'dev@usekplr.com',
+    picture: undefined,
+  });
+
   // Initialize user from storage synchronously to avoid race conditions
   const getInitialUser = (): User | null => {
-    // First check URL for auth token (for cross-subdomain auth)
+    // In development mode, skip auth and use mock user
+    if (import.meta.env.DEV) {
+      const storedUser = getUserFromStorage();
+      if (storedUser) {
+        return storedUser;
+      }
+      // Create and save mock user for dev
+      const mockUser = getMockUser();
+      saveUserToStorage(mockUser);
+      return mockUser;
+    }
+
+    // In production, check for auth token
     if (typeof window !== 'undefined') {
       checkUrlForAuth();
     }
@@ -44,7 +64,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading] = useState(false); // Start as false since we read synchronously
 
   useEffect(() => {
-    // Check URL for auth token on mount (for cross-subdomain redirects)
+    // In development mode, ensure we have a mock user
+    if (import.meta.env.DEV) {
+      const storedUser = getUserFromStorage();
+      if (!storedUser) {
+        const mockUser = getMockUser();
+        saveUserToStorage(mockUser);
+        setUser(mockUser);
+      } else if (!user) {
+        setUser(storedUser);
+      }
+      return;
+    }
+
+    // In production, check URL for auth token on mount (for cross-subdomain redirects)
     if (checkUrlForAuth()) {
       const savedUser = getUserFromStorage();
       if (savedUser) {
@@ -57,7 +90,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUser(savedUser);
       }
     }
-  }, []);
+  }, [user]);
 
   const login = (userData: User) => {
     setUser(userData);

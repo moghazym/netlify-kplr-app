@@ -83,6 +83,9 @@ export const checkUrlForAuth = (): boolean => {
     if (user) {
       saveUserToStorage(user);
       
+      // Clear the auth session ID since authentication is complete
+      sessionStorage.removeItem('auth_session_id');
+      
       // Clean up URL by removing auth parameter
       urlParams.delete('auth');
       const newUrl = window.location.pathname + 
