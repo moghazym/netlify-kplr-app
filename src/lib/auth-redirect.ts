@@ -22,6 +22,8 @@ export const redirectToAuth = (currentPath?: string) => {
   // Get the app base URL (localhost:port in dev, app.usekplr.com in prod)
   const appBaseUrl = getAppBaseUrl();
   // Always use /callback as the redirect_uri
+  // IMPORTANT: This must match exactly what's configured in Google OAuth Console
+  // The auth service must forward this redirect_uri to Google OAuth
   const redirectUri = `${appBaseUrl}/callback`;
   
   const clientId = import.meta.env.VITE_CLIENT_ID || 'kplr-client';
@@ -39,10 +41,12 @@ export const redirectToAuth = (currentPath?: string) => {
   // Always use production auth service
   const authBaseUrl = getAuthBaseUrl();
   
+  // Build URL parameters - ensure redirect_uri is properly encoded
   const urlParams = new URLSearchParams();
+  // CRITICAL: The redirect_uri must be the app's callback URL, not the auth service's callback
+  // The auth service should use this redirect_uri when calling Google OAuth
   urlParams.set('redirect_uri', redirectUri);
-  // Only add client_id and authorization_session_id if your auth service expects them
-  // Remove them if your auth service doesn't use them
+  
   if (clientId) {
     urlParams.set('client_id', clientId);
   }
@@ -52,13 +56,27 @@ export const redirectToAuth = (currentPath?: string) => {
   
   const authUrl = `${authBaseUrl}/?${urlParams.toString()}`;
   
-  console.log('🚫 Redirecting to auth:', {
+  // Enhanced logging to help debug redirect_uri issues
+  console.log('🚫 Redirecting to auth service:', {
     authUrl,
     redirectUri,
+    redirectUriEncoded: encodeURIComponent(redirectUri),
+    appBaseUrl,
+    currentHostname: window.location.hostname,
+    currentOrigin: window.location.origin,
     sessionId,
     pathToReturnTo,
     reusedSessionId: !!existingSessionId,
   });
+  
+  // Validate that redirect_uri is correct before redirecting
+  if (!redirectUri.includes('/callback')) {
+    console.error('❌ ERROR: redirect_uri must include /callback path:', redirectUri);
+  }
+  
+  if (redirectUri.includes('auth.usekplr.com')) {
+    console.error('❌ ERROR: redirect_uri should point to app domain, not auth domain:', redirectUri);
+  }
   
   // Don't clear the session ID here - let it persist until auth completes
   // It will be cleared when the user successfully authenticates and returns
