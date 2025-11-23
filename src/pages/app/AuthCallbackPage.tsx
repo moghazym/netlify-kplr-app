@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { checkUrlForAuth, getUserFromStorage, saveUserToStorage } from '../../lib/auth-storage';
+import { getUserFromStorage, saveUserToStorage } from '../../lib/auth-storage';
 import { exchangeGoogleCode } from '../../lib/api-client';
 
 /**
  * Callback page that handles authentication redirects from the auth service
- * Expected URL format: /callback?code=...&auth=...
+ * Expected URL format: /callback?code=...
+ * Exchanges the OAuth code for tokens via the backend API
  */
 export const AuthCallbackPage = () => {
   const navigate = useNavigate();
@@ -31,24 +32,20 @@ export const AuthCallbackPage = () => {
       }
     }, 10000);
 
-    let pollInterval: NodeJS.Timeout | null = null;
-
-    // Check for auth token in URL (from auth service redirect)
-    const authToken = searchParams.get('auth');
+    // Check for OAuth code in URL
     const code = searchParams.get('code');
 
     if (import.meta.env.DEV) {
       console.log('🔐 AuthCallbackPage:', {
-        authToken: authToken ? 'present' : 'missing',
         code: code ? 'present' : 'missing',
         allParams: Object.fromEntries(searchParams.entries()),
         processed,
       });
     }
 
-    // If we already have a user in storage and no auth token in URL, redirect immediately
+    // If we already have a user in storage and no code, redirect immediately
     // This handles page refreshes after successful auth
-    if (!authToken && !code) {
+    if (!code) {
       const existingUser = getUserFromStorage();
       if (existingUser) {
         console.log('✅ User already authenticated, redirecting to dashboard');
@@ -57,65 +54,16 @@ export const AuthCallbackPage = () => {
         navigate(originalPath, { replace: true });
         setProcessed(true);
         return;
+      } else {
+        console.warn('⚠️ No code and no user in storage, redirecting to dashboard');
+        setProcessed(true);
+        clearTimeout(fallbackTimeout);
+        navigate('/dashboard', { replace: true });
+        return;
       }
     }
 
-    if (authToken) {
-      setProcessed(true);
-      clearTimeout(fallbackTimeout); // Clear fallback since we're processing
-      
-      console.log('🔐 Auth token detected, processing...', {
-        authTokenLength: authToken.length,
-        hasCode: !!code,
-      });
-      
-      try {
-        // Process the auth token
-        const authProcessed = checkUrlForAuth();
-        console.log('🔐 Auth processed:', authProcessed);
-        
-        // Get the original path before clearing
-        const originalPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
-        
-        // Clear session data
-        sessionStorage.removeItem('auth_redirect_path');
-        sessionStorage.removeItem('auth_session_id');
-        
-        if (authProcessed) {
-          // Get the user from storage (saved by checkUrlForAuth)
-          const user = getUserFromStorage();
-          console.log('🔐 User from storage:', user ? 'found' : 'not found', user);
-          
-          if (user) {
-            // Update auth context
-            login(user);
-            console.log('✅ User logged in, redirecting to:', originalPath);
-          } else {
-            console.warn('⚠️ No user data found, but auth token was processed. Token stored, redirecting anyway.');
-          }
-          
-          // Always redirect, even if user data is missing (token is stored)
-          console.log('🔄 Navigating to:', originalPath);
-          
-          // Use window.location immediately for more reliable redirect
-          // React Router navigate as backup
-          window.location.href = originalPath;
-          
-          // Also try React Router navigate (in case window.location is blocked)
-          setTimeout(() => {
-            navigate(originalPath, { replace: true });
-          }, 50);
-        } else {
-          console.error('❌ Failed to process auth token, redirecting to dashboard');
-          navigate('/dashboard', { replace: true });
-        }
-      } catch (error) {
-        console.error('❌ Error processing auth:', error);
-        const originalPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
-        sessionStorage.removeItem('auth_redirect_path');
-        navigate(originalPath, { replace: true });
-      }
-    } else if (code) {
+    if (code) {
       // If we have a code but no auth token, exchange the code for tokens via API
       console.log('🔐 Received code, exchanging for tokens...');
       setProcessed(true);
@@ -171,7 +119,9 @@ export const AuthCallbackPage = () => {
           
           console.log('✅ Authentication successful, redirecting to:', originalPath);
           clearTimeout(fallbackTimeout);
-          navigate(originalPath, { replace: true });
+          
+          // Use window.location for immediate, reliable redirect
+          window.location.href = originalPath;
         })
         .catch((error) => {
           console.error('❌ Failed to exchange code for tokens:', error);
@@ -187,12 +137,9 @@ export const AuthCallbackPage = () => {
       navigate('/dashboard', { replace: true });
     }
 
-    // Single cleanup function for all cases
+    // Cleanup function
     return () => {
       clearTimeout(fallbackTimeout);
-      if (pollInterval) {
-        clearInterval(pollInterval);
-      }
     };
   }, [searchParams, navigate, login, processed]);
 
