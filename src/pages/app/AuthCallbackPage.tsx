@@ -19,7 +19,7 @@ export const AuthCallbackPage = () => {
       return;
     }
 
-    // Fallback: Always redirect after 5 seconds to prevent getting stuck
+    // Fallback: Always redirect after 10 seconds to prevent getting stuck
     const fallbackTimeout = setTimeout(() => {
       if (!processed) {
         console.warn('⚠️ Fallback: Redirecting after timeout');
@@ -28,7 +28,9 @@ export const AuthCallbackPage = () => {
         navigate(originalPath, { replace: true });
         setProcessed(true);
       }
-    }, 5000);
+    }, 10000);
+
+    let pollInterval: NodeJS.Timeout | null = null;
 
     // Check for auth token in URL (from auth service redirect)
     const authToken = searchParams.get('auth');
@@ -88,31 +90,98 @@ export const AuthCallbackPage = () => {
           }
           
           // Always redirect, even if user data is missing (token is stored)
+          clearTimeout(fallbackTimeout);
+          // Use both navigate and window.location as fallback
           navigate(originalPath, { replace: true });
+          // Fallback: force navigation if React Router doesn't work
+          setTimeout(() => {
+            if (window.location.pathname === '/callback') {
+              console.warn('⚠️ React Router navigation failed, using window.location');
+              window.location.href = originalPath;
+            }
+          }, 100);
         } else {
           console.error('❌ Failed to process auth token');
+          clearTimeout(fallbackTimeout);
           navigate('/dashboard', { replace: true });
         }
       } catch (error) {
         console.error('❌ Error processing auth:', error);
+        clearTimeout(fallbackTimeout);
         navigate('/dashboard', { replace: true });
       }
     } else if (code) {
-      // If we have a code but no auth token, the backend might still be processing
-      // Wait a bit and check again, or redirect to dashboard
-      console.warn('⚠️ Received code but no auth token yet');
-      // Don't set processed here, allow retry
-      setTimeout(() => {
-        if (!processed) {
+      // If we have a code but no auth token, the auth service might still be processing
+      // Poll the URL to check if the auth token appears (auth service might do client-side redirect)
+      console.warn('⚠️ Received code but no auth token yet, polling for auth token...');
+      
+      let pollCount = 0;
+      const maxPolls = 20; // Poll for up to 10 seconds (20 * 500ms)
+      
+      pollInterval = setInterval(() => {
+        pollCount++;
+        
+        // Check the current URL directly (not just searchParams, which might not update)
+        const currentUrl = new URL(window.location.href);
+        const authParam = currentUrl.searchParams.get('auth');
+        
+        console.log(`🔍 Polling attempt ${pollCount}/${maxPolls}, auth token:`, authParam ? 'found!' : 'not found');
+        
+        if (authParam) {
+          // Auth token appeared! Process it
+          clearInterval(pollInterval);
+          clearTimeout(fallbackTimeout);
+          
+          console.log('✅ Auth token appeared, processing...');
+          
+          try {
+            const authProcessed = checkUrlForAuth();
+            if (authProcessed) {
+              const user = getUserFromStorage();
+              const originalPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
+              sessionStorage.removeItem('auth_redirect_path');
+              sessionStorage.removeItem('auth_session_id');
+              
+              if (user) {
+                login(user);
+              }
+              
+              console.log('✅ Authentication successful, redirecting to:', originalPath);
+              navigate(originalPath, { replace: true });
+            } else {
+              console.error('❌ Failed to process auth token after polling');
+              navigate('/dashboard', { replace: true });
+            }
+          } catch (error) {
+            console.error('❌ Error processing auth after polling:', error);
+            navigate('/dashboard', { replace: true });
+          }
+          
+          setProcessed(true);
+        } else if (pollCount >= maxPolls) {
+          // Max polls reached, give up
+          clearInterval(pollInterval);
+          clearTimeout(fallbackTimeout);
+          console.warn('⚠️ Max polling attempts reached, redirecting to dashboard');
           navigate('/dashboard', { replace: true });
+          setProcessed(true);
         }
-      }, 2000);
+      }, 500); // Poll every 500ms
     } else {
       // No auth token or code, redirect to dashboard
       console.warn('⚠️ No auth token or code in callback URL');
       setProcessed(true);
+      clearTimeout(fallbackTimeout);
       navigate('/dashboard', { replace: true });
     }
+
+    // Single cleanup function for all cases
+    return () => {
+      clearTimeout(fallbackTimeout);
+      if (pollInterval) {
+        clearInterval(pollInterval);
+      }
+    };
   }, [searchParams, navigate, login, processed]);
 
   return (
