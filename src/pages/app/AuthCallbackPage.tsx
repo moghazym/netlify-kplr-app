@@ -129,7 +129,9 @@ export const AuthCallbackPage = () => {
         
         if (authParam) {
           // Auth token appeared! Process it
-          clearInterval(pollInterval);
+          if (pollInterval) {
+            clearInterval(pollInterval);
+          }
           clearTimeout(fallbackTimeout);
           
           console.log('✅ Auth token appeared, processing...');
@@ -160,7 +162,9 @@ export const AuthCallbackPage = () => {
           setProcessed(true);
         } else if (pollCount >= maxPolls) {
           // Max polls reached, give up
-          clearInterval(pollInterval);
+          if (pollInterval) {
+            clearInterval(pollInterval);
+          }
           clearTimeout(fallbackTimeout);
           console.warn('⚠️ Max polling attempts reached, redirecting to dashboard');
           navigate('/dashboard', { replace: true });
