@@ -96,29 +96,62 @@ export const checkUrlForAuth = (): boolean => {
   const urlParams = new URLSearchParams(window.location.search);
   const authToken = urlParams.get('auth');
   
-  if (authToken) {
-    // Check if it's a JWT token
-    if (isJWT(authToken)) {
-      // Store JWT token for API calls
-      localStorage.setItem('access_token', authToken);
-      sessionStorage.setItem('access_token', authToken);
+  if (!authToken) {
+    console.log('🔐 No auth token in URL');
+    return false;
+  }
+  
+  console.log('🔐 Processing auth token, isJWT:', isJWT(authToken));
+  
+  // Check if it's a JWT token
+  if (isJWT(authToken)) {
+    console.log('🔐 Detected JWT token, storing...');
+    
+    // Store JWT token for API calls
+    localStorage.setItem('access_token', authToken);
+    sessionStorage.setItem('access_token', authToken);
+    
+    // Try to decode JWT to get user info (JWT payload is base64 encoded JSON)
+    try {
+      const payload = JSON.parse(atob(authToken.split('.')[1]));
+      console.log('🔐 JWT payload:', payload);
       
-      // Try to decode JWT to get user info (JWT payload is base64 encoded JSON)
-      try {
-        const payload = JSON.parse(atob(authToken.split('.')[1]));
-        if (payload.sub || payload.email || payload.user_id) {
-          const user: User = {
-            id: payload.sub || payload.user_id || payload.id || 'unknown',
-            name: payload.name || payload.full_name || payload.username || 'User',
-            email: payload.email || '',
-            picture: payload.picture || payload.avatar_url || undefined,
-          };
-          saveUserToStorage(user);
-        }
-      } catch (error) {
-        console.warn('Could not decode JWT payload for user info:', error);
-        // Still save the token even if we can't decode user info
+      if (payload.sub || payload.email || payload.user_id || payload.id) {
+        const user: User = {
+          id: String(payload.sub || payload.user_id || payload.id || 'unknown'),
+          name: payload.name || payload.full_name || payload.username || 'User',
+          email: payload.email || '',
+          picture: payload.picture || payload.avatar_url || undefined,
+        };
+        console.log('🔐 Extracted user from JWT:', user);
+        saveUserToStorage(user);
+      } else {
+        console.warn('⚠️ JWT payload does not contain user identifiers:', Object.keys(payload));
       }
+    } catch (error) {
+      console.warn('⚠️ Could not decode JWT payload for user info:', error);
+      // Still save the token even if we can't decode user info
+    }
+    
+    // Clear the auth session ID since authentication is complete
+    sessionStorage.removeItem('auth_session_id');
+    
+    // Clean up URL by removing auth parameter
+    urlParams.delete('auth');
+    const newUrl = window.location.pathname + 
+      (urlParams.toString() ? '?' + urlParams.toString() : '') + 
+      window.location.hash;
+    window.history.replaceState({}, '', newUrl);
+    
+    console.log('✅ JWT token processed and stored');
+    return true;
+  } else {
+    // Try to decode as base64-encoded user data (legacy format)
+    console.log('🔐 Trying to decode as base64 user data...');
+    const user = decodeUserFromUrl(authToken);
+    if (user) {
+      console.log('🔐 Decoded user from base64:', user);
+      saveUserToStorage(user);
       
       // Clear the auth session ID since authentication is complete
       sessionStorage.removeItem('auth_session_id');
@@ -130,25 +163,10 @@ export const checkUrlForAuth = (): boolean => {
         window.location.hash;
       window.history.replaceState({}, '', newUrl);
       
+      console.log('✅ Base64 user data processed and stored');
       return true;
     } else {
-      // Try to decode as base64-encoded user data (legacy format)
-      const user = decodeUserFromUrl(authToken);
-      if (user) {
-        saveUserToStorage(user);
-        
-        // Clear the auth session ID since authentication is complete
-        sessionStorage.removeItem('auth_session_id');
-        
-        // Clean up URL by removing auth parameter
-        urlParams.delete('auth');
-        const newUrl = window.location.pathname + 
-          (urlParams.toString() ? '?' + urlParams.toString() : '') + 
-          window.location.hash;
-        window.history.replaceState({}, '', newUrl);
-        
-        return true;
-      }
+      console.error('❌ Failed to decode auth token as either JWT or base64 user data');
     }
   }
   

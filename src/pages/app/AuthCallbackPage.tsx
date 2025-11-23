@@ -19,6 +19,17 @@ export const AuthCallbackPage = () => {
       return;
     }
 
+    // Fallback: Always redirect after 5 seconds to prevent getting stuck
+    const fallbackTimeout = setTimeout(() => {
+      if (!processed) {
+        console.warn('⚠️ Fallback: Redirecting after timeout');
+        const originalPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
+        sessionStorage.removeItem('auth_redirect_path');
+        navigate(originalPath, { replace: true });
+        setProcessed(true);
+      }
+    }, 5000);
+
     // Check for auth token in URL (from auth service redirect)
     const authToken = searchParams.get('auth');
     const code = searchParams.get('code');
@@ -50,31 +61,34 @@ export const AuthCallbackPage = () => {
       setProcessed(true);
       
       try {
+        console.log('🔐 Processing auth token...');
+        
         // Process the auth token
         const authProcessed = checkUrlForAuth();
+        console.log('🔐 Auth processed:', authProcessed);
         
         if (authProcessed) {
           // Get the user from storage (saved by checkUrlForAuth)
           const user = getUserFromStorage();
+          console.log('🔐 User from storage:', user ? 'found' : 'not found');
+          
+          // Get the original path before clearing
+          const originalPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
+          
+          // Clear session data
+          sessionStorage.removeItem('auth_redirect_path');
+          sessionStorage.removeItem('auth_session_id');
           
           if (user) {
             // Update auth context
             login(user);
-            
-            // Redirect to dashboard (or the originally intended page)
-            const originalPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
-            sessionStorage.removeItem('auth_redirect_path');
-            sessionStorage.removeItem('auth_session_id'); // Clear session ID
-            
-            if (import.meta.env.DEV) {
-              console.log('✅ Authentication successful, redirecting to:', originalPath);
-            }
-            
-            navigate(originalPath, { replace: true });
+            console.log('✅ Authentication successful, redirecting to:', originalPath);
           } else {
-            console.error('❌ Failed to decode user from auth token');
-            navigate('/dashboard', { replace: true });
+            console.warn('⚠️ No user data found, but auth token was processed. Redirecting anyway.');
           }
+          
+          // Always redirect, even if user data is missing (token is stored)
+          navigate(originalPath, { replace: true });
         } else {
           console.error('❌ Failed to process auth token');
           navigate('/dashboard', { replace: true });
