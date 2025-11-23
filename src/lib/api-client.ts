@@ -93,7 +93,7 @@ export const apiRequest = async <T = any>(
       errorData = await response.json();
     } catch {
       errorData = {
-        detail: `HTTP ${response.status}: ${response.statusText}`,
+      detail: `HTTP ${response.status}: ${response.statusText}`,
       };
     }
     
@@ -586,6 +586,37 @@ export const updateProject = async (projectId: number, data: ProjectUpdate): Pro
  */
 export const deleteProject = async (projectId: number): Promise<void> => {
   return apiDelete(`/api/projects/${projectId}`);
+};
+
+// ============================================================================
+// Authentication API
+// ============================================================================
+
+export interface GoogleCallbackResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type?: string;
+  user?: {
+    id: string;
+    email: string;
+    name?: string;
+    picture?: string;
+  };
+}
+
+/**
+ * Exchange Google OAuth code for tokens
+ * This is called when the auth service redirects with just a code
+ * The endpoint expects a callback data object with the code
+ */
+export const exchangeGoogleCode = async (code: string): Promise<GoogleCallbackResponse> => {
+  // The endpoint accepts additionalProperties, so we can send the code directly
+  // Based on the OpenAPI spec, it accepts a flexible object
+  return apiPost<GoogleCallbackResponse>('/api/auth/google/callback', {
+    code,
+    // Include redirect_uri if needed (some OAuth flows require it)
+    redirect_uri: `${window.location.origin}/callback`,
+  });
 };
 
 // ============================================================================

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { checkUrlForAuth, getUserFromStorage } from '../../lib/auth-storage';
+import { checkUrlForAuth, getUserFromStorage, saveUserToStorage } from '../../lib/auth-storage';
+import { exchangeGoogleCode } from '../../lib/api-client';
 
 /**
  * Callback page that handles authentication redirects from the auth service
@@ -61,116 +62,123 @@ export const AuthCallbackPage = () => {
 
     if (authToken) {
       setProcessed(true);
+      clearTimeout(fallbackTimeout); // Clear fallback since we're processing
+      
+      console.log('🔐 Auth token detected, processing...', {
+        authTokenLength: authToken.length,
+        hasCode: !!code,
+      });
       
       try {
-        console.log('🔐 Processing auth token...');
-        
         // Process the auth token
         const authProcessed = checkUrlForAuth();
         console.log('🔐 Auth processed:', authProcessed);
         
+        // Get the original path before clearing
+        const originalPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
+        
+        // Clear session data
+        sessionStorage.removeItem('auth_redirect_path');
+        sessionStorage.removeItem('auth_session_id');
+        
         if (authProcessed) {
           // Get the user from storage (saved by checkUrlForAuth)
           const user = getUserFromStorage();
-          console.log('🔐 User from storage:', user ? 'found' : 'not found');
-          
-          // Get the original path before clearing
-          const originalPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
-          
-          // Clear session data
-          sessionStorage.removeItem('auth_redirect_path');
-          sessionStorage.removeItem('auth_session_id');
+          console.log('🔐 User from storage:', user ? 'found' : 'not found', user);
           
           if (user) {
             // Update auth context
             login(user);
-            console.log('✅ Authentication successful, redirecting to:', originalPath);
+            console.log('✅ User logged in, redirecting to:', originalPath);
           } else {
-            console.warn('⚠️ No user data found, but auth token was processed. Redirecting anyway.');
+            console.warn('⚠️ No user data found, but auth token was processed. Token stored, redirecting anyway.');
           }
           
           // Always redirect, even if user data is missing (token is stored)
-          clearTimeout(fallbackTimeout);
-          // Use both navigate and window.location as fallback
-          navigate(originalPath, { replace: true });
-          // Fallback: force navigation if React Router doesn't work
+          console.log('🔄 Navigating to:', originalPath);
+          
+          // Use window.location immediately for more reliable redirect
+          // React Router navigate as backup
+          window.location.href = originalPath;
+          
+          // Also try React Router navigate (in case window.location is blocked)
           setTimeout(() => {
-            if (window.location.pathname === '/callback') {
-              console.warn('⚠️ React Router navigation failed, using window.location');
-              window.location.href = originalPath;
-            }
-          }, 100);
+            navigate(originalPath, { replace: true });
+          }, 50);
         } else {
-          console.error('❌ Failed to process auth token');
-          clearTimeout(fallbackTimeout);
+          console.error('❌ Failed to process auth token, redirecting to dashboard');
           navigate('/dashboard', { replace: true });
         }
       } catch (error) {
         console.error('❌ Error processing auth:', error);
-        clearTimeout(fallbackTimeout);
-        navigate('/dashboard', { replace: true });
+        const originalPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
+        sessionStorage.removeItem('auth_redirect_path');
+        navigate(originalPath, { replace: true });
       }
     } else if (code) {
-      // If we have a code but no auth token, the auth service might still be processing
-      // Poll the URL to check if the auth token appears (auth service might do client-side redirect)
-      console.warn('⚠️ Received code but no auth token yet, polling for auth token...');
+      // If we have a code but no auth token, exchange the code for tokens via API
+      console.log('🔐 Received code, exchanging for tokens...');
+      setProcessed(true);
       
-      let pollCount = 0;
-      const maxPolls = 20; // Poll for up to 10 seconds (20 * 500ms)
-      
-      pollInterval = setInterval(() => {
-        pollCount++;
-        
-        // Check the current URL directly (not just searchParams, which might not update)
-        const currentUrl = new URL(window.location.href);
-        const authParam = currentUrl.searchParams.get('auth');
-        
-        console.log(`🔍 Polling attempt ${pollCount}/${maxPolls}, auth token:`, authParam ? 'found!' : 'not found');
-        
-        if (authParam) {
-          // Auth token appeared! Process it
-          if (pollInterval) {
-            clearInterval(pollInterval);
+      exchangeGoogleCode(code)
+        .then((response) => {
+          console.log('✅ Code exchanged successfully:', response);
+          
+          // Store the access token
+          if (response.access_token) {
+            localStorage.setItem('access_token', response.access_token);
+            sessionStorage.setItem('access_token', response.access_token);
           }
-          clearTimeout(fallbackTimeout);
           
-          console.log('✅ Auth token appeared, processing...');
+          if (response.refresh_token) {
+            localStorage.setItem('refresh_token', response.refresh_token);
+            sessionStorage.setItem('refresh_token', response.refresh_token);
+          }
           
-          try {
-            const authProcessed = checkUrlForAuth();
-            if (authProcessed) {
-              const user = getUserFromStorage();
-              const originalPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
-              sessionStorage.removeItem('auth_redirect_path');
-              sessionStorage.removeItem('auth_session_id');
-              
-              if (user) {
-                login(user);
-              }
-              
-              console.log('✅ Authentication successful, redirecting to:', originalPath);
-              navigate(originalPath, { replace: true });
-            } else {
-              console.error('❌ Failed to process auth token after polling');
-              navigate('/dashboard', { replace: true });
+          // Extract user info from response or token
+          let user = null;
+          if (response.user) {
+            user = {
+              id: String(response.user.id),
+              name: response.user.name || response.user.email || 'User',
+              email: response.user.email || '',
+              picture: response.user.picture,
+            };
+          } else if (response.access_token) {
+            // Try to decode user from JWT token
+            try {
+              const payload = JSON.parse(atob(response.access_token.split('.')[1]));
+              user = {
+                id: String(payload.sub || payload.user_id || payload.id || 'unknown'),
+                name: payload.name || payload.full_name || payload.username || payload.email || 'User',
+                email: payload.email || '',
+                picture: payload.picture || payload.avatar_url,
+              };
+            } catch (error) {
+              console.warn('⚠️ Could not decode user from token:', error);
             }
-          } catch (error) {
-            console.error('❌ Error processing auth after polling:', error);
-            navigate('/dashboard', { replace: true });
           }
           
-          setProcessed(true);
-        } else if (pollCount >= maxPolls) {
-          // Max polls reached, give up
-          if (pollInterval) {
-            clearInterval(pollInterval);
+          if (user) {
+            saveUserToStorage(user);
+            login(user);
           }
+          
+          // Clear session data
+          const originalPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
+          sessionStorage.removeItem('auth_redirect_path');
+          sessionStorage.removeItem('auth_session_id');
+          
+          console.log('✅ Authentication successful, redirecting to:', originalPath);
           clearTimeout(fallbackTimeout);
-          console.warn('⚠️ Max polling attempts reached, redirecting to dashboard');
+          navigate(originalPath, { replace: true });
+        })
+        .catch((error) => {
+          console.error('❌ Failed to exchange code for tokens:', error);
+          clearTimeout(fallbackTimeout);
+          // Still redirect to dashboard, user can try again
           navigate('/dashboard', { replace: true });
-          setProcessed(true);
-        }
-      }, 500); // Poll every 500ms
+        });
     } else {
       // No auth token or code, redirect to dashboard
       console.warn('⚠️ No auth token or code in callback URL');
