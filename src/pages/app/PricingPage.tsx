@@ -4,7 +4,7 @@ import { DollarSign, TrendingUp, Calendar, Download } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { getTestSuites, getTestRunsForSuite, type TestSuiteResponse, type TestRunResponse } from "@/lib/api-client";
+import { getTestSuites, getTestRunsForSuite } from "@/lib/api-client";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, BarChart, Bar } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
