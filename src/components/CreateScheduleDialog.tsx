@@ -17,38 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { getTestSuites, createSchedule, type TestSuiteResponse, type ScheduleCreate } from "@/lib/api-client";
 
-interface TestSuite {
-  id: string;
-  name: string;
-  created_at: string;
-  scenario_count?: number;
-}
-
-// Mock data - replace with real Supabase queries when available
-const mockSuites: TestSuite[] = [
-  {
-    id: "1",
-    name: "Regression Suite",
-    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    scenario_count: 12,
-  },
-  {
-    id: "2",
-    name: "Smoke Tests",
-    created_at: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-    scenario_count: 5,
-  },
-  {
-    id: "3",
-    name: "Integration Tests",
-    created_at: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(),
-    scenario_count: 8,
-  },
-];
 
 interface CreateScheduleDialogProps {
   open: boolean;
@@ -64,7 +36,7 @@ export function CreateScheduleDialog({
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [testSuites, setTestSuites] = useState<any[]>([]);
+  const [testSuites, setTestSuites] = useState<TestSuiteResponse[]>([]);
   
   const [formData, setFormData] = useState({
     name: "",
@@ -73,9 +45,6 @@ export function CreateScheduleDialog({
     time_of_day: "09:00",
     days_of_week: [] as number[],
     day_of_month: 1,
-    cron_expression: "",
-    repeat_type: "always",
-    repeat_count: 1,
   });
 
   useEffect(() => {
@@ -86,47 +55,51 @@ export function CreateScheduleDialog({
 
   const fetchTestSuites = async () => {
     try {
-      // TODO: Replace with real Supabase query
-      // const { data, error } = await supabase
-      //   .from('test_suites')
-      //   .select('id, name')
-      //   .eq('user_id', user?.id)
-      //   .order('name', { ascending: true });
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      setTestSuites(mockSuites);
+      const suites = await getTestSuites();
+      setTestSuites(suites);
     } catch (error) {
       console.error('Error fetching test suites:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to load test suites",
+        variant: "destructive",
+      });
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !formData.test_suite_id) {
+      toast({
+        title: "Error",
+        description: "Please select a test suite",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setLoading(true);
     try {
-      const { error } = await supabase
-        .from('test_schedules')
-        .insert({
-          user_id: user.id,
-          name: formData.name,
-          test_suite_id: formData.test_suite_id,
-          schedule_type: formData.schedule_type,
-          time_of_day: formData.time_of_day,
-          days_of_week: formData.days_of_week,
-          day_of_month: formData.day_of_month,
-          cron_expression: formData.cron_expression || null,
-          repeat_type: formData.repeat_type,
-          repeat_count: formData.repeat_type === 'limited' ? formData.repeat_count : null,
-          is_active: true,
-        })
-        .select()
-        .single();
+      // Find the selected test suite to get project_id
+      const selectedSuite = testSuites.find(s => s.id === parseInt(formData.test_suite_id, 10));
+      if (!selectedSuite) {
+        throw new Error("Selected test suite not found");
+      }
 
-      if (error) throw error;
+      // Map form data to API format
+      const scheduleData: ScheduleCreate = {
+        name: formData.name,
+        project_id: selectedSuite.project_id,
+        test_suite_id: parseInt(formData.test_suite_id, 10),
+        frequency: formData.schedule_type as 'daily' | 'weekly' | 'monthly',
+        time_of_day: formData.time_of_day,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        days_of_week: formData.schedule_type === 'weekly' ? formData.days_of_week : null,
+        day_of_month: formData.schedule_type === 'monthly' ? formData.day_of_month : null,
+        is_active: true,
+      };
+
+      await createSchedule(scheduleData);
 
       toast({
         title: "Success",
@@ -144,15 +117,12 @@ export function CreateScheduleDialog({
         time_of_day: "09:00",
         days_of_week: [],
         day_of_month: 1,
-        cron_expression: "",
-        repeat_type: "always",
-        repeat_count: 1,
       });
     } catch (error) {
       console.error('Error creating schedule:', error);
       toast({
         title: "Error",
-        description: "Failed to create schedule",
+        description: error instanceof Error ? error.message : "Failed to create schedule",
         variant: "destructive",
       });
     } finally {
@@ -193,7 +163,7 @@ export function CreateScheduleDialog({
               </SelectTrigger>
               <SelectContent>
                 {testSuites.map((suite) => (
-                  <SelectItem key={suite.id} value={suite.id}>
+                  <SelectItem key={suite.id} value={suite.id.toString()}>
                     {suite.name}
                   </SelectItem>
                 ))}
@@ -215,7 +185,6 @@ export function CreateScheduleDialog({
                   <SelectItem value="daily">Daily</SelectItem>
                   <SelectItem value="weekly">Weekly</SelectItem>
                   <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="custom">Custom (Cron)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -271,51 +240,7 @@ export function CreateScheduleDialog({
             </div>
           )}
 
-          {formData.schedule_type === 'custom' && (
-            <div className="space-y-2">
-              <Label htmlFor="cron_expression">Cron Expression</Label>
-              <Input
-                id="cron_expression"
-                value={formData.cron_expression}
-                onChange={(e) => setFormData({ ...formData, cron_expression: e.target.value })}
-                placeholder="0 9 * * *"
-                required
-              />
-            </div>
-          )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="repeat_type">Repeat</Label>
-              <Select
-                value={formData.repeat_type}
-                onValueChange={(value) => setFormData({ ...formData, repeat_type: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="once">Run once</SelectItem>
-                  <SelectItem value="limited">Limited times</SelectItem>
-                  <SelectItem value="always">Indefinitely</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {formData.repeat_type === 'limited' && (
-              <div className="space-y-2">
-                <Label htmlFor="repeat_count">Number of Runs</Label>
-                <Input
-                  id="repeat_count"
-                  type="number"
-                  min="1"
-                  value={formData.repeat_count}
-                  onChange={(e) => setFormData({ ...formData, repeat_count: parseInt(e.target.value) })}
-                  required
-                />
-              </div>
-            )}
-          </div>
 
           <DialogFooter>
             <Button

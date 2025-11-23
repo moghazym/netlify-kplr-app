@@ -97,7 +97,6 @@ export const checkUrlForAuth = (): boolean => {
   const authToken = urlParams.get('auth');
   
   if (!authToken) {
-    console.log('🔐 No auth token in URL');
     return false;
   }
   

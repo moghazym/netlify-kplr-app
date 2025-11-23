@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getUserFromStorage, saveUserToStorage, clearUserFromStorage, checkUrlForAuth } from '../lib/auth-storage';
+import { getUserFromStorage, saveUserToStorage, clearUserFromStorage } from '../lib/auth-storage';
 
 interface User {
   id: string;
@@ -53,10 +53,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return mockUser;
     }
 
-    // In production, check for auth token
-    if (typeof window !== 'undefined') {
-      checkUrlForAuth();
-    }
+    // In production, get user from storage
     return getUserFromStorage();
   };
 
@@ -77,18 +74,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       return;
     }
 
-    // In production, check URL for auth token on mount (for cross-subdomain redirects)
-    if (checkUrlForAuth()) {
-      const savedUser = getUserFromStorage();
-      if (savedUser) {
-        setUser(savedUser);
-      }
-    } else {
-      // Double-check storage on mount (in case it was updated from another tab)
-      const savedUser = getUserFromStorage();
-      if (savedUser) {
-        setUser(savedUser);
-      }
+    // In production, check storage on mount (in case it was updated from another tab or after auth)
+    const savedUser = getUserFromStorage();
+    if (savedUser) {
+      setUser(savedUser);
     }
   }, [user]);
 
