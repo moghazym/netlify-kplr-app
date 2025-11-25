@@ -12,7 +12,6 @@ import { apiGet } from '../../lib/api-client';
 export const AuthCallbackPage = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
-  const [processed, setProcessed] = useState(false);
 
   useEffect(() => {
     const completeAuth = async () => {
