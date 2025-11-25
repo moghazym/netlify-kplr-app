@@ -8,7 +8,31 @@ import {
   mockCreateProject, 
   mockGetProject, 
   mockUpdateProject, 
-  mockDeleteProject
+  mockDeleteProject,
+  mockGetTestSuites,
+  mockGetTestSuite,
+  mockCreateTestSuite,
+  mockUpdateTestSuite,
+  mockDeleteTestSuite,
+  mockGetTestRunsForSuite,
+  mockGetLatestTestRun,
+  mockGetTestRun,
+  mockCreateTestRun,
+  mockGetScenarios,
+  mockGetScenario,
+  mockGetSchedules,
+  mockGetSchedule,
+  mockCreateSchedule,
+  mockUpdateSchedule,
+  mockDeleteSchedule,
+  mockGetSecrets,
+  mockGetSecret,
+  mockCreateSecret,
+  mockUpdateSecret,
+  mockDeleteSecret,
+  mockRevealSecret,
+  mockGetDashboardStatistics,
+  mockGetRecentTestRuns,
 } from './mock-api';
 
 // Get the API base URL from environment variable or use a default
@@ -53,7 +77,7 @@ export const apiRequest = async <T = any>(
       errorData = await response.json();
     } catch {
       errorData = {
-        detail: `HTTP ${response.status}: ${response.statusText}`,
+      detail: `HTTP ${response.status}: ${response.statusText}`,
       };
     }
     
@@ -81,13 +105,17 @@ export const apiRequest = async <T = any>(
 };
 
 /**
- * Handle mock API requests for development
+ * Handle mock API requests for development and production (when authenticated)
  */
 const handleMockRequest = async <T = any>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> => {
   const method = options.method || 'GET';
+  
+  // ============================================================================
+  // Projects API
+  // ============================================================================
   
   // Handle GET /api/projects/
   if (method === 'GET' && endpoint.includes('/api/projects/') && !endpoint.match(/\/api\/projects\/\d+$/)) {
@@ -129,39 +157,312 @@ const handleMockRequest = async <T = any>(
     }
   }
   
+  // ============================================================================
+  // Test Suites API
+  // ============================================================================
+  
+  // Handle GET /api/test-suites/
+  if (method === 'GET' && endpoint.includes('/api/test-suites/')) {
+    let parsedProjectId: number | undefined;
+    try {
+      const url = new URL(endpoint, 'http://dummy');
+      const projectId = url.searchParams.get('project_id');
+      parsedProjectId = projectId ? parseInt(projectId, 10) : undefined;
+    } catch {
+      // If URL parsing fails, try manual parsing
+      const match = endpoint.match(/[?&]project_id=(\d+)/);
+      if (match) {
+        parsedProjectId = parseInt(match[1], 10);
+      }
+    }
+    return mockGetTestSuites(parsedProjectId) as Promise<T>;
+  }
+  
+  // Handle GET /api/test-suites/{id}
+  if (method === 'GET' && endpoint.match(/\/api\/test-suites\/\d+$/)) {
+    const match = endpoint.match(/\/api\/test-suites\/(\d+)$/);
+    if (match) {
+      const testSuiteId = parseInt(match[1], 10);
+      return mockGetTestSuite(testSuiteId) as Promise<T>;
+    }
+  }
+  
+  // Handle POST /api/test-suites/
+  if (method === 'POST' && endpoint.includes('/api/test-suites/')) {
+    const body = options.body ? JSON.parse(options.body as string) : {};
+    return mockCreateTestSuite(body) as Promise<T>;
+  }
+  
+  // Handle PUT /api/test-suites/{id}
+  if (method === 'PUT' && endpoint.match(/\/api\/test-suites\/\d+$/)) {
+    const match = endpoint.match(/\/api\/test-suites\/(\d+)$/);
+    if (match) {
+      const testSuiteId = parseInt(match[1], 10);
+      const body = options.body ? JSON.parse(options.body as string) : {};
+      return mockUpdateTestSuite(testSuiteId, body) as Promise<T>;
+    }
+  }
+  
+  // Handle DELETE /api/test-suites/{id}
+  if (method === 'DELETE' && endpoint.match(/\/api\/test-suites\/\d+$/)) {
+    const match = endpoint.match(/\/api\/test-suites\/(\d+)$/);
+    if (match) {
+      const testSuiteId = parseInt(match[1], 10);
+      await mockDeleteTestSuite(testSuiteId);
+      return undefined as T;
+    }
+  }
+  
+  // ============================================================================
+  // Test Runs API
+  // ============================================================================
+  
+  // Handle GET /api/test-runs/suite/{id}/runs
+  if (method === 'GET' && endpoint.match(/\/api\/test-runs\/suite\/\d+\/runs/)) {
+    const match = endpoint.match(/\/api\/test-runs\/suite\/(\d+)\/runs/);
+    if (match) {
+      const testSuiteId = parseInt(match[1], 10);
+      return mockGetTestRunsForSuite(testSuiteId) as Promise<T>;
+    }
+  }
+  
+  // Handle GET /api/test-runs/suite/{id}/latest
+  if (method === 'GET' && endpoint.match(/\/api\/test-runs\/suite\/\d+\/latest/)) {
+    const match = endpoint.match(/\/api\/test-runs\/suite\/(\d+)\/latest/);
+    if (match) {
+      const testSuiteId = parseInt(match[1], 10);
+      return mockGetLatestTestRun(testSuiteId) as Promise<T>;
+    }
+  }
+  
+  // Handle GET /api/test-runs/{id}
+  if (method === 'GET' && endpoint.match(/\/api\/test-runs\/\d+$/)) {
+    const match = endpoint.match(/\/api\/test-runs\/(\d+)$/);
+    if (match) {
+      const testRunId = parseInt(match[1], 10);
+      return mockGetTestRun(testRunId) as Promise<T>;
+    }
+  }
+  
+  // Handle POST /api/test-runs/
+  if (method === 'POST' && endpoint.includes('/api/test-runs/')) {
+    const body = options.body ? JSON.parse(options.body as string) : {};
+    return mockCreateTestRun(body) as Promise<T>;
+  }
+  
+  // ============================================================================
+  // Scenarios API
+  // ============================================================================
+  
+  // Handle GET /api/scenarios/
+  if (method === 'GET' && endpoint.includes('/api/scenarios/')) {
+    let parsedTestSuiteId: number | undefined;
+    try {
+      const url = new URL(endpoint, 'http://dummy');
+      const testSuiteId = url.searchParams.get('test_suite_id');
+      parsedTestSuiteId = testSuiteId ? parseInt(testSuiteId, 10) : undefined;
+    } catch {
+      // If URL parsing fails, try manual parsing
+      const match = endpoint.match(/[?&]test_suite_id=(\d+)/);
+      if (match) {
+        parsedTestSuiteId = parseInt(match[1], 10);
+      }
+    }
+    return mockGetScenarios(parsedTestSuiteId) as Promise<T>;
+  }
+  
+  // Handle GET /api/scenarios/{id}
+  if (method === 'GET' && endpoint.match(/\/api\/scenarios\/\d+$/)) {
+    const match = endpoint.match(/\/api\/scenarios\/(\d+)$/);
+    if (match) {
+      const scenarioId = parseInt(match[1], 10);
+      return mockGetScenario(scenarioId) as Promise<T>;
+    }
+  }
+  
+  // ============================================================================
+  // Schedules API
+  // ============================================================================
+  
+  // Handle GET /api/schedules/
+  if (method === 'GET' && endpoint.includes('/api/schedules/')) {
+    const params: any = {};
+    try {
+      const url = new URL(endpoint, 'http://dummy');
+      if (url.searchParams.get('project_id')) {
+        params.project_id = parseInt(url.searchParams.get('project_id')!, 10);
+      }
+      if (url.searchParams.get('test_suite_id')) {
+        params.test_suite_id = parseInt(url.searchParams.get('test_suite_id')!, 10);
+      }
+      if (url.searchParams.get('is_active') !== null) {
+        params.is_active = url.searchParams.get('is_active') === 'true';
+      }
+    } catch {
+      // If URL parsing fails, try manual parsing
+      const projectIdMatch = endpoint.match(/[?&]project_id=(\d+)/);
+      if (projectIdMatch) {
+        params.project_id = parseInt(projectIdMatch[1], 10);
+      }
+      const testSuiteIdMatch = endpoint.match(/[?&]test_suite_id=(\d+)/);
+      if (testSuiteIdMatch) {
+        params.test_suite_id = parseInt(testSuiteIdMatch[1], 10);
+      }
+      const isActiveMatch = endpoint.match(/[?&]is_active=(true|false)/);
+      if (isActiveMatch) {
+        params.is_active = isActiveMatch[1] === 'true';
+      }
+    }
+    return mockGetSchedules(params) as Promise<T>;
+  }
+  
+  // Handle GET /api/schedules/{id}
+  if (method === 'GET' && endpoint.match(/\/api\/schedules\/\d+$/)) {
+    const match = endpoint.match(/\/api\/schedules\/(\d+)$/);
+    if (match) {
+      const scheduleId = parseInt(match[1], 10);
+      return mockGetSchedule(scheduleId) as Promise<T>;
+    }
+  }
+  
+  // Handle POST /api/schedules/
+  if (method === 'POST' && endpoint.includes('/api/schedules/')) {
+    const body = options.body ? JSON.parse(options.body as string) : {};
+    return mockCreateSchedule(body) as Promise<T>;
+  }
+  
+  // Handle PUT /api/schedules/{id}
+  if (method === 'PUT' && endpoint.match(/\/api\/schedules\/\d+$/)) {
+    const match = endpoint.match(/\/api\/schedules\/(\d+)$/);
+    if (match) {
+      const scheduleId = parseInt(match[1], 10);
+      const body = options.body ? JSON.parse(options.body as string) : {};
+      return mockUpdateSchedule(scheduleId, body) as Promise<T>;
+    }
+  }
+  
+  // Handle DELETE /api/schedules/{id}
+  if (method === 'DELETE' && endpoint.match(/\/api\/schedules\/\d+$/)) {
+    const match = endpoint.match(/\/api\/schedules\/(\d+)$/);
+    if (match) {
+      const scheduleId = parseInt(match[1], 10);
+      await mockDeleteSchedule(scheduleId);
+      return undefined as T;
+    }
+  }
+  
+  // ============================================================================
+  // Secrets API
+  // ============================================================================
+  
+  // Handle GET /api/secrets/
+  if (method === 'GET' && endpoint.includes('/api/secrets/') && !endpoint.includes('/reveal')) {
+    return mockGetSecrets() as Promise<T>;
+  }
+  
+  // Handle GET /api/secrets/{id}
+  if (method === 'GET' && endpoint.match(/\/api\/secrets\/\d+$/) && !endpoint.includes('/reveal')) {
+    const match = endpoint.match(/\/api\/secrets\/(\d+)$/);
+    if (match) {
+      const secretId = parseInt(match[1], 10);
+      return mockGetSecret(secretId) as Promise<T>;
+    }
+  }
+  
+  // Handle GET /api/secrets/{id}/reveal
+  if (method === 'GET' && endpoint.match(/\/api\/secrets\/\d+\/reveal/)) {
+    const match = endpoint.match(/\/api\/secrets\/(\d+)\/reveal/);
+    if (match) {
+      const secretId = parseInt(match[1], 10);
+      return mockRevealSecret(secretId) as Promise<T>;
+    }
+  }
+  
+  // Handle POST /api/secrets/
+  if (method === 'POST' && endpoint.includes('/api/secrets/')) {
+    const body = options.body ? JSON.parse(options.body as string) : {};
+    return mockCreateSecret(body) as Promise<T>;
+  }
+  
+  // Handle PATCH /api/secrets/{id}
+  if (method === 'PATCH' && endpoint.match(/\/api\/secrets\/\d+$/)) {
+    const match = endpoint.match(/\/api\/secrets\/(\d+)$/);
+    if (match) {
+      const secretId = parseInt(match[1], 10);
+      const body = options.body ? JSON.parse(options.body as string) : {};
+      return mockUpdateSecret(secretId, body) as Promise<T>;
+    }
+  }
+  
+  // Handle DELETE /api/secrets/{id}
+  if (method === 'DELETE' && endpoint.match(/\/api\/secrets\/\d+$/)) {
+    const match = endpoint.match(/\/api\/secrets\/(\d+)$/);
+    if (match) {
+      const secretId = parseInt(match[1], 10);
+      await mockDeleteSecret(secretId);
+      return undefined as T;
+    }
+  }
+  
+  // ============================================================================
+  // Dashboard API
+  // ============================================================================
+  
   // Handle GET /api/dashboard/statistics
   if (method === 'GET' && endpoint.includes('/api/dashboard/statistics')) {
-    return {
-      total_test_runs: 0,
-      passed_scenarios: 0,
-      failed_scenarios: 0,
-      success_rate: 0,
-    } as T;
+    const params: any = {};
+    try {
+      const url = new URL(endpoint, 'http://dummy');
+      if (url.searchParams.get('project_id')) {
+        params.project_id = parseInt(url.searchParams.get('project_id')!, 10);
+      }
+      if (url.searchParams.get('start_date')) {
+        params.start_date = url.searchParams.get('start_date');
+      }
+      if (url.searchParams.get('end_date')) {
+        params.end_date = url.searchParams.get('end_date');
+      }
+    } catch {
+      // If URL parsing fails, try manual parsing
+      const projectIdMatch = endpoint.match(/[?&]project_id=(\d+)/);
+      if (projectIdMatch) {
+        params.project_id = parseInt(projectIdMatch[1], 10);
+      }
+      const startDateMatch = endpoint.match(/[?&]start_date=([^&]+)/);
+      if (startDateMatch) {
+        params.start_date = startDateMatch[1];
+      }
+      const endDateMatch = endpoint.match(/[?&]end_date=([^&]+)/);
+      if (endDateMatch) {
+        params.end_date = endDateMatch[1];
+      }
+    }
+    return mockGetDashboardStatistics(params) as Promise<T>;
   }
   
   // Handle GET /api/dashboard/recent-runs
   if (method === 'GET' && endpoint.includes('/api/dashboard/recent-runs')) {
-    return [] as T;
-  }
-  
-  // Handle GET /api/test-suites/
-  if (method === 'GET' && endpoint.includes('/api/test-suites/')) {
-    return [] as T;
-  }
-  
-  // Handle GET /api/schedules/
-  if (method === 'GET' && endpoint.includes('/api/schedules/')) {
-    return [] as T;
-  }
-  
-  // Handle GET /api/test-runs/
-  if (method === 'GET' && endpoint.includes('/api/test-runs/')) {
-    return [] as T;
-  }
-  
-  // Handle GET /api/scenarios/
-  if (method === 'GET' && endpoint.includes('/api/scenarios/')) {
-    return [] as T;
+    const params: any = {};
+    try {
+      const url = new URL(endpoint, 'http://dummy');
+      if (url.searchParams.get('project_id')) {
+        params.project_id = parseInt(url.searchParams.get('project_id')!, 10);
+      }
+      if (url.searchParams.get('limit')) {
+        params.limit = parseInt(url.searchParams.get('limit')!, 10);
+      }
+    } catch {
+      // If URL parsing fails, try manual parsing
+      const projectIdMatch = endpoint.match(/[?&]project_id=(\d+)/);
+      if (projectIdMatch) {
+        params.project_id = parseInt(projectIdMatch[1], 10);
+      }
+      const limitMatch = endpoint.match(/[?&]limit=(\d+)/);
+      if (limitMatch) {
+        params.limit = parseInt(limitMatch[1], 10);
+      }
+    }
+    return mockGetRecentTestRuns(params) as Promise<T>;
   }
   
   // Fallback: return empty array or throw error
@@ -269,6 +570,37 @@ export const updateProject = async (projectId: number, data: ProjectUpdate): Pro
  */
 export const deleteProject = async (projectId: number): Promise<void> => {
   return apiDelete(`/api/projects/${projectId}`);
+};
+
+// ============================================================================
+// Authentication API
+// ============================================================================
+
+export interface GoogleCallbackResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type?: string;
+  user?: {
+    id: string;
+    email: string;
+    name?: string;
+    picture?: string;
+  };
+}
+
+/**
+ * Exchange Google OAuth code for tokens
+ * This is called when the auth service redirects with just a code
+ * The endpoint expects a callback data object with the code
+ */
+export const exchangeGoogleCode = async (code: string): Promise<GoogleCallbackResponse> => {
+  // The endpoint accepts additionalProperties, so we can send the code directly
+  // Based on the OpenAPI spec, it accepts a flexible object
+  return apiPost<GoogleCallbackResponse>('/api/auth/google/callback', {
+    code,
+    // Include redirect_uri if needed (some OAuth flows require it)
+    redirect_uri: `${window.location.origin}/callback`,
+  });
 };
 
 // ============================================================================

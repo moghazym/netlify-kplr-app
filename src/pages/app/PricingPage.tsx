@@ -2,9 +2,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DollarSign, TrendingUp, Calendar, Download } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { getTestSuites, getTestRunsForSuite } from "@/lib/api-client";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, BarChart, Bar } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -74,25 +74,38 @@ export default function PricingPage() {
     try {
       setLoading(true);
 
-      // Fetch all test runs within date range
-      const { data: runs, error: runsError } = await supabase
-        .from("test_runs")
-        .select(`
-          id,
-          total_scenarios,
-          started_at,
-          test_suites (name)
-        `)
-        .eq("user_id", user?.id)
-        .gte("started_at", dateRange.from.toISOString())
-        .lte("started_at", dateRange.to.toISOString())
-        .order("started_at", { ascending: false });
+      // Get all test suites for the user
+      const testSuites = await getTestSuites();
+      
+      // Fetch test runs for all suites
+      const allRunsPromises = testSuites.map(suite => 
+        getTestRunsForSuite(suite.id).catch(err => {
+          console.warn(`Error fetching runs for suite ${suite.id}:`, err);
+          return [];
+        })
+      );
+      
+      const allRunsArrays = await Promise.all(allRunsPromises);
+      const allRuns = allRunsArrays.flat();
+      
+      // Filter runs by date range
+      const dateFrom = dateRange.from.getTime();
+      const dateTo = dateRange.to.getTime();
+      
+      const runs = allRuns.filter(run => {
+        const runDate = new Date(run.started_at).getTime();
+        return runDate >= dateFrom && runDate <= dateTo;
+      });
 
-      if (runsError) throw runsError;
+      // Create a map of suite IDs to suite names for lookup
+      const suiteMap = new Map<number, string>();
+      testSuites.forEach(suite => {
+        suiteMap.set(suite.id, suite.name);
+      });
 
       // Calculate statistics
-      const totalExecutions = runs?.length || 0;
-      const totalScenarios = runs?.reduce((sum: number, run: { total_scenarios: number }) => sum + run.total_scenarios, 0) || 0;
+      const totalExecutions = runs.length;
+      const totalScenarios = runs.reduce((sum, run) => sum + run.total_scenarios, 0);
       
       // Calculate free vs paid scenarios
       const freeScenarios = Math.min(totalScenarios, FREE_TIER_SCENARIOS);
@@ -106,15 +119,14 @@ export default function PricingPage() {
       currentMonthStart.setDate(1);
       currentMonthStart.setHours(0, 0, 0, 0);
       
-      const { data: monthRuns } = await supabase
-        .from("test_runs")
-        .select("total_scenarios")
-        .eq("user_id", user?.id)
-        .gte("started_at", currentMonthStart.toISOString());
+      const monthRuns = runs.filter(run => {
+        const runDate = new Date(run.started_at).getTime();
+        return runDate >= currentMonthStart.getTime();
+      });
 
-      const monthScenarios = monthRuns?.reduce((sum: number, run: { total_scenarios: number }) => sum + run.total_scenarios, 0) || 0;
+      const monthScenarios = monthRuns.reduce((sum, run) => sum + run.total_scenarios, 0);
       const monthPaidScenarios = Math.max(0, monthScenarios - FREE_TIER_SCENARIOS);
-      const currentMonthCost = ((monthRuns?.length || 0) * COST_PER_TEST_RUN) + (monthPaidScenarios * COST_PER_SCENARIO);
+      const currentMonthCost = (monthRuns.length * COST_PER_TEST_RUN) + (monthPaidScenarios * COST_PER_SCENARIO);
 
       setStats({
         totalExecutions,
@@ -127,7 +139,7 @@ export default function PricingPage() {
 
       // Generate usage history
       const historyMap = new Map<string, { executions: number; scenarios: number }>();
-      runs?.forEach((run: { started_at: string; total_scenarios: number }) => {
+      runs.forEach((run) => {
         const dateKey = format(new Date(run.started_at), "MMM dd");
         const existing = historyMap.get(dateKey) || { executions: 0, scenarios: 0 };
         historyMap.set(dateKey, {
@@ -148,13 +160,15 @@ export default function PricingPage() {
       setUsageHistory(history);
 
       // Format execution details
-      const details: ExecutionDetail[] = runs?.slice(0, 20).map((run: { id: string; total_scenarios: number; started_at: string; test_suites: { name?: string } | null }) => ({
-        id: run.id,
-        suite_name: (run.test_suites as any)?.name || "Unknown Suite",
-        scenarios: run.total_scenarios,
-        cost: COST_PER_TEST_RUN + (Math.max(0, run.total_scenarios - (FREE_TIER_SCENARIOS / totalExecutions)) * COST_PER_SCENARIO),
-        started_at: new Date(run.started_at).toLocaleString(),
-      })) || [];
+      const details: ExecutionDetail[] = runs
+        .slice(0, 20)
+        .map((run) => ({
+          id: String(run.id),
+          suite_name: suiteMap.get(run.test_suite_id) || "Unknown Suite",
+          scenarios: run.total_scenarios,
+          cost: COST_PER_TEST_RUN + (Math.max(0, run.total_scenarios - (FREE_TIER_SCENARIOS / (totalExecutions || 1))) * COST_PER_SCENARIO),
+          started_at: new Date(run.started_at).toLocaleString(),
+        }));
 
       setExecutionDetails(details);
 
@@ -162,7 +176,7 @@ export default function PricingPage() {
       console.error("Error fetching usage data:", error);
       toast({
         title: "Error",
-        description: "Failed to load usage data",
+        description: error instanceof Error ? error.message : "Failed to load usage data",
         variant: "destructive",
       });
     } finally {

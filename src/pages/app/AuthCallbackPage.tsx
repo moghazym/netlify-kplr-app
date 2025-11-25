@@ -6,11 +6,13 @@ import { apiGet } from '../../lib/api-client';
 
 /**
  * Callback page that handles authentication redirects from the auth service
- * Expected URL format: /callback?code=...&auth=...
+ * Expected URL format: /callback?code=...
+ * Exchanges the OAuth code for tokens via the backend API
  */
 export const AuthCallbackPage = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
+  const [processed, setProcessed] = useState(false);
 
   useEffect(() => {
     const completeAuth = async () => {
