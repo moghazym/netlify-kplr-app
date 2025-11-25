@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { checkUrlForAuth, getUserFromStorage } from '../../lib/auth-storage';
+import { saveUserToStorage } from '../../lib/auth-storage';
+import { apiGet } from '../../lib/api-client';
 
 /**
  * Callback page that handles authentication redirects from the auth service
@@ -9,63 +10,32 @@ import { checkUrlForAuth, getUserFromStorage } from '../../lib/auth-storage';
  */
 export const AuthCallbackPage = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { login } = useAuth();
 
   useEffect(() => {
-    // Check for auth token in URL (from auth service redirect)
-    const authToken = searchParams.get('auth');
-    const code = searchParams.get('code');
-
-    if (import.meta.env.DEV) {
-      console.log('🔐 AuthCallbackPage:', {
-        authToken: authToken ? 'present' : 'missing',
-        code: code ? 'present' : 'missing',
-        allParams: Object.fromEntries(searchParams.entries()),
-      });
-    }
-
-    if (authToken) {
-      // Process the auth token
-      const authProcessed = checkUrlForAuth();
-      
-      if (authProcessed) {
-        // Get the user from storage (saved by checkUrlForAuth)
-        const user = getUserFromStorage();
-        
-        if (user) {
-          // Update auth context
-          login(user);
-          
-          // Redirect to dashboard (or the originally intended page)
-          // You could also store the original path in sessionStorage before redirecting to auth
-          const originalPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
-          sessionStorage.removeItem('auth_redirect_path');
-          
-          if (import.meta.env.DEV) {
-            console.log('✅ Authentication successful, redirecting to:', originalPath);
-          }
-          
-          navigate(originalPath, { replace: true });
-        } else {
-          console.error('❌ Failed to decode user from auth token');
-          navigate('/dashboard', { replace: true });
+    const completeAuth = async () => {
+      try {
+        console.log('[AuthCallback] Attempting to fetch authenticated user');
+        const me = await apiGet('/api/auth/me');
+        if (me) {
+          saveUserToStorage(me);
+          login(me);
+          console.log('[AuthCallback] User hydrated from backend', me);
         }
-      } else {
-        console.error('❌ Failed to process auth token');
-        navigate('/dashboard', { replace: true });
+        const redirectPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
+        sessionStorage.removeItem('auth_redirect_path');
+        console.log('[AuthCallback] Redirecting user to', redirectPath);
+        navigate(redirectPath, { replace: true });
+      } catch (error) {
+        console.error('[AuthCallback] Auth callback failed', error);
+        const fallback = sessionStorage.getItem('auth_redirect_path') || '/';
+        sessionStorage.removeItem('auth_redirect_path');
+        console.log('[AuthCallback] Redirecting user to fallback', fallback);
+        navigate(fallback, { replace: true });
       }
-    } else if (code) {
-      // If we have a code but no auth token, the backend might still be processing
-      // Wait a bit and check again, or redirect to dashboard
-      console.warn('⚠️ Received code but no auth token yet');
-      navigate('/dashboard', { replace: true });
-    } else {
-      // No auth token or code, redirect to dashboard
-      console.warn('⚠️ No auth token or code in callback URL');
-      navigate('/dashboard', { replace: true });
-    }
-  }, [searchParams, navigate, login]);
+    };
+    completeAuth();
+  }, [navigate, login]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">
@@ -91,4 +61,3 @@ export const AuthCallbackPage = () => {
     </div>
   );
 };
-

@@ -15,22 +15,6 @@ import {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
- * Get the authentication token from storage
- * This can be extended to support different token storage mechanisms
- */
-const getAuthToken = (): string | null => {
-  if (typeof window === 'undefined') return null;
-  
-  // Try to get token from localStorage
-  const token = localStorage.getItem('access_token') || 
-                localStorage.getItem('auth_token') ||
-                sessionStorage.getItem('access_token') ||
-                sessionStorage.getItem('auth_token');
-  
-  return token;
-};
-
-/**
  * Make an authenticated API request
  */
 export const apiRequest = async <T = any>(
@@ -42,16 +26,15 @@ export const apiRequest = async <T = any>(
     return handleMockRequest<T>(endpoint, options);
   }
   
-  const token = getAuthToken();
-  
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
-  
-  // Add Bearer token if available
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+
+  const isFormData =
+    typeof FormData !== 'undefined' && options.body instanceof FormData;
+
+  if (!isFormData && options.body && !headers['Content-Type']) {
+    headers['Content-Type'] = 'application/json';
   }
   
   const url = endpoint.startsWith('http') 
@@ -61,6 +44,7 @@ export const apiRequest = async <T = any>(
   const response = await fetch(url, {
     ...options,
     headers,
+    credentials: 'include',
   });
   
   if (!response.ok) {
@@ -376,6 +360,81 @@ export const deleteTestSuite = async (testSuiteId: number): Promise<void> => {
   return apiDelete(`/api/test-suites/${testSuiteId}`);
 };
 
+/**
+ * Upload attachments for a test suite
+ */
+export const uploadTestSuiteAttachments = async (
+  testSuiteId: number,
+  files: File[]
+): Promise<any[]> => {
+  if (!files.length) {
+    return [];
+  }
+  const formData = new FormData();
+  files.forEach((file) => formData.append('files', file));
+  return apiRequest<any[]>(`/api/test-suites/${testSuiteId}/attachments`, {
+    method: 'POST',
+    body: formData,
+  });
+};
+
+export interface ScenarioGenerationRequest {
+  test_suite_id?: number;
+  test_suite_name: string;
+  application_url: string;
+  test_description: string;
+  ai_testing_instructions?: string;
+  setup_instructions?: string;
+  setup_screenshot_base64?: string;
+  setup_final_url?: string;
+  exploration_screenshots_base64?: string[];
+}
+
+export interface ScenarioGenerationResponse {
+  scenarios: string[];
+}
+
+/**
+ * Generate scenarios using AI
+ */
+export const generateScenarios = async (
+  data: ScenarioGenerationRequest
+): Promise<ScenarioGenerationResponse> => {
+  return apiPost<ScenarioGenerationResponse>(
+    '/api/scenario-generation/generate',
+    data
+  );
+};
+
+export interface ExplorationActionsRequest {
+  screenshot_base64: string;
+  current_url: string;
+  max_actions?: number;
+  guidance?: string;
+}
+
+export interface ExplorationAction {
+  name: string;
+  args: Record<string, any>;
+  description?: string;
+}
+
+export interface ExplorationActionsResponse {
+  actions: ExplorationAction[];
+}
+
+/**
+ * Request exploration actions for a screenshot
+ */
+export const getExplorationActions = async (
+  data: ExplorationActionsRequest
+): Promise<ExplorationActionsResponse> => {
+  return apiPost<ExplorationActionsResponse>(
+    '/api/computer-use/exploration-actions',
+    data
+  );
+};
+
 // ============================================================================
 // Test Runs API
 // ============================================================================
@@ -438,6 +497,18 @@ export const getTestRun = async (testRunId: number): Promise<TestRunWithSessions
  */
 export const createTestRun = async (data: TestRunCreate): Promise<TestRunResponse> => {
   return apiPost<TestRunResponse>('/api/test-runs/', data);
+};
+
+export interface CloudRunTriggerRequest {
+  project_id: number;
+  suite_id: number;
+  scenario_id?: number;
+  schedule_id?: string;
+  options?: { max_steps?: number };
+}
+
+export const triggerCloudRun = async (data: CloudRunTriggerRequest): Promise<any> => {
+  return apiPost('/api/cloud-run/trigger', data);
 };
 
 /**
@@ -514,6 +585,145 @@ export const updateScenario = async (scenarioId: number, data: ScenarioUpdate): 
  */
 export const deleteScenario = async (scenarioId: number): Promise<void> => {
   return apiDelete(`/api/scenarios/${scenarioId}`);
+};
+
+// ============================================================================
+// App Registry API
+// ============================================================================
+
+export interface MobileAppBuildResponse {
+  id: number;
+  app_id: number;
+  version: string;
+  channel?: string | null;
+  notes?: string | null;
+  status: string;
+  storage_path: string;
+  download_url: string;
+  file_name?: string | null;
+  file_size?: number | null;
+  content_type?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MobileAppResponse {
+  id: number;
+  project_id: number;
+  name: string;
+  package_id: string;
+  platform: string;
+  description?: string | null;
+  icon_url?: string | null;
+  created_at: string;
+  updated_at: string;
+  builds?: MobileAppBuildResponse[];
+}
+
+export interface CreateMobileAppRequest {
+  project_id: number;
+  name: string;
+  package_id: string;
+  platform: string;
+  description?: string;
+  icon_url?: string;
+}
+
+export interface BuildUploadRequest {
+  file_name: string;
+  content_type?: string;
+  version: string;
+  channel?: string;
+  notes?: string;
+}
+
+export interface BuildUploadResponse {
+  build_id: number;
+  signed_url: string;
+  storage_path: string;
+  download_url: string;
+}
+
+export interface CompleteBuildRequest {
+  file_size?: number;
+  status?: string;
+}
+
+export const getMobileApps = async (projectId?: number): Promise<MobileAppResponse[]> => {
+  const suffix = projectId ? `?project_id=${projectId}` : '';
+  return apiGet<MobileAppResponse[]>(`/api/app-registry/apps${suffix}`);
+};
+
+export const createMobileApp = async (data: CreateMobileAppRequest): Promise<MobileAppResponse> => {
+  return apiPost<MobileAppResponse>('/api/app-registry/apps', data);
+};
+
+export const requestMobileAppBuildUpload = async (
+  appId: number,
+  data: BuildUploadRequest
+): Promise<BuildUploadResponse> => {
+  return apiPost<BuildUploadResponse>(`/api/app-registry/apps/${appId}/build-uploads`, data);
+};
+
+export const completeMobileAppBuild = async (
+  buildId: number,
+  data: CompleteBuildRequest
+): Promise<MobileAppBuildResponse> => {
+  return apiPost<MobileAppBuildResponse>(`/api/app-registry/builds/${buildId}/complete`, data);
+};
+
+// ============================================================================
+// Agent Session API
+// ============================================================================
+
+export interface CreateAgentSessionRequest {
+  query: string;
+  model_name?: string;
+  initial_url: string;
+  screen_size: [number, number];
+  test_run_id?: number;
+  scenario_id?: number;
+}
+
+export interface ExecuteAgentStepRequest {
+  screenshot_base64: string;
+  current_url: string;
+  context: Record<string, any>;
+}
+
+export interface CompleteAgentStepRequest {
+  url: string;
+  context: any;
+  screenshot_base64?: string;
+  console_logs?: any[];
+  network_logs?: any[];
+}
+
+export const createAgentSession = async (data: CreateAgentSessionRequest): Promise<any> => {
+  return apiPost('/api/computer-use/sessions', data);
+};
+
+export const executeAgentStep = async (
+  sessionUuid: string,
+  data: ExecuteAgentStepRequest
+): Promise<any> => {
+  return apiPost(`/api/computer-use/sessions/${sessionUuid}/steps`, data);
+};
+
+export const completeAgentStep = async (
+  sessionUuid: string,
+  stepId: number,
+  data: CompleteAgentStepRequest
+): Promise<any> => {
+  return apiPost(`/api/computer-use/sessions/${sessionUuid}/steps/${stepId}/complete`, data);
+};
+
+export const getAgentSessionStatus = async (sessionUuid: string): Promise<any> => {
+  return apiGet(`/api/computer-use/sessions/${sessionUuid}/status`);
+};
+
+export const getLatestSessionScreenshot = async (sessionUuid: string): Promise<any> => {
+  return apiGet(`/api/computer-use/sessions/${sessionUuid}/latest-screenshot`);
 };
 
 // ============================================================================
@@ -756,4 +966,3 @@ export const deleteSecret = async (secretId: number): Promise<void> => {
 export const revealSecret = async (secretId: number): Promise<SecretRevealResponse> => {
   return apiGet<SecretRevealResponse>(`/api/secrets/${secretId}/reveal`);
 };
-
