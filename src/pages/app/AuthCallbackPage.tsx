@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { saveUserToStorage } from '../../lib/auth-storage';
-import { apiGet } from '../../lib/api-client';
+import { checkUrlForAuth } from '../../lib/auth-storage';
+import { redirectToAuth } from '../../lib/auth-redirect';
 
 /**
  * Callback page that handles authentication redirects from the auth service
- * Expected URL format: /callback?code=...
- * Exchanges the OAuth code for tokens via the backend API
+ * Expected URL format: /callback?auth=...
+ * Processes the auth token and fetches user from backend
  */
 export const AuthCallbackPage = () => {
   const navigate = useNavigate();
@@ -16,23 +16,26 @@ export const AuthCallbackPage = () => {
   useEffect(() => {
     const completeAuth = async () => {
       try {
-        console.log('[AuthCallback] Attempting to fetch authenticated user');
-        const me = await apiGet('/api/auth/me');
-        if (me) {
-          saveUserToStorage(me);
-          login(me);
-          console.log('[AuthCallback] User hydrated from backend', me);
-        }
+        console.log('[AuthCallback] Processing authentication callback');
+
+        // Check if there's an auth token in the URL and process it
+        // The auth service sends back ?auth=... which needs to be stored
+        const foundAuth = checkUrlForAuth();
+        console.log('[AuthCallback] Auth token in URL:', foundAuth);
+
+        // AuthContext will handle fetching user data via /api/auth/me
+        // No need to call it again here
+
         const redirectPath = sessionStorage.getItem('auth_redirect_path') || '/dashboard';
         sessionStorage.removeItem('auth_redirect_path');
+        sessionStorage.removeItem('auth_session_id');
         console.log('[AuthCallback] Redirecting user to', redirectPath);
         navigate(redirectPath, { replace: true });
       } catch (error) {
         console.error('[AuthCallback] Auth callback failed', error);
-        const fallback = sessionStorage.getItem('auth_redirect_path') || '/';
-        sessionStorage.removeItem('auth_redirect_path');
-        console.log('[AuthCallback] Redirecting user to fallback', fallback);
-        navigate(fallback, { replace: true });
+        // If auth processing fails, redirect back to auth flow
+        console.log('[AuthCallback] Redirecting to auth flow due to error');
+        redirectToAuth(window.location.pathname);
       }
     };
     completeAuth();

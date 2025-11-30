@@ -32,10 +32,6 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   useEffect(() => {
-    // In development mode, skip auth redirect
-    if (import.meta.env.DEV) {
-      return;
-    }
 
     // Don't redirect if we're on the callback route (it handles its own auth)
     if (location.pathname === '/callback') {
@@ -72,8 +68,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     );
   }
 
-  // In development mode, always allow access (mock user is set in AuthContext)
-  if (!actuallyAuthenticated && !import.meta.env.DEV) {
+  // Require authentication for all environments
+  if (!actuallyAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

@@ -42,29 +42,11 @@ const mockProjects: ProjectResponse[] = [
 
 /**
  * Check if we should use mock API
- * In production, use mock API when authenticated (since API endpoints aren't ready yet)
- * In development, use mock API if no API base URL is configured
+ * Disabled - always use real API at api.usekplr.com
  */
 export const shouldUseMockApi = (): boolean => {
-  // Check if user is authenticated (in production, we want to show dummy data after auth)
-  const isAuthenticated = typeof window !== 'undefined' && !!(
-    localStorage.getItem('user') || 
-    sessionStorage.getItem('user') ||
-    localStorage.getItem('access_token') ||
-    sessionStorage.getItem('access_token')
-  );
-  
-  const isDevelopment = import.meta.env.DEV || 
-    window.location.hostname === "localhost" || 
-    window.location.hostname === "127.0.0.1" ||
-    window.location.hostname.includes('.localhost');
-  
-  const hasApiBaseUrl = !!import.meta.env.VITE_API_BASE_URL;
-  
-  // Use mock API if:
-  // 1. In development and no API base URL is configured, OR
-  // 2. In production and user is authenticated (to show dummy data)
-  return (isDevelopment && !hasApiBaseUrl) || (!isDevelopment && isAuthenticated);
+  // Always use real API
+  return false;
 };
 
 /**
@@ -74,7 +56,7 @@ export const shouldUseMockApi = (): boolean => {
 export const mockGetProjects = async (): Promise<ProjectResponse[]> => {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 300));
-  
+
   // Return a copy of mock projects
   return [...mockProjects];
 };
@@ -86,7 +68,7 @@ export const mockGetProjects = async (): Promise<ProjectResponse[]> => {
 export const mockCreateProject = async (data: { name: string; description?: string | null }): Promise<ProjectResponse> => {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 400));
-  
+
   const newProject: ProjectResponse = {
     id: Math.max(...mockProjects.map(p => p.id)) + 1,
     name: data.name,
@@ -95,10 +77,10 @@ export const mockCreateProject = async (data: { name: string; description?: stri
     created_at: new Date().toISOString(),
     updated_at: null,
   };
-  
+
   // Add to mock data
   mockProjects.push(newProject);
-  
+
   return newProject;
 };
 
@@ -109,13 +91,13 @@ export const mockCreateProject = async (data: { name: string; description?: stri
 export const mockGetProject = async (projectId: number): Promise<ProjectResponse> => {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 200));
-  
+
   const project = mockProjects.find(p => p.id === projectId);
-  
+
   if (!project) {
     throw new Error(`Project with id ${projectId} not found`);
   }
-  
+
   return { ...project };
 };
 
@@ -129,22 +111,22 @@ export const mockUpdateProject = async (
 ): Promise<ProjectResponse> => {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 300));
-  
+
   const projectIndex = mockProjects.findIndex(p => p.id === projectId);
-  
+
   if (projectIndex === -1) {
     throw new Error(`Project with id ${projectId} not found`);
   }
-  
+
   // Update project
   const updatedProject: ProjectResponse = {
     ...mockProjects[projectIndex],
     ...data,
     updated_at: new Date().toISOString(),
   };
-  
+
   mockProjects[projectIndex] = updatedProject;
-  
+
   return { ...updatedProject };
 };
 
@@ -155,13 +137,13 @@ export const mockUpdateProject = async (
 export const mockDeleteProject = async (projectId: number): Promise<void> => {
   // Simulate API delay
   await new Promise(resolve => setTimeout(resolve, 250));
-  
+
   const projectIndex = mockProjects.findIndex(p => p.id === projectId);
-  
+
   if (projectIndex === -1) {
     throw new Error(`Project with id ${projectId} not found`);
   }
-  
+
   // Remove project
   mockProjects.splice(projectIndex, 1);
 };
@@ -245,7 +227,7 @@ const mockTestSuites: TestSuiteResponse[] = [
 
 export const mockGetTestSuites = async (projectId?: number): Promise<TestSuiteResponse[]> => {
   await new Promise(resolve => setTimeout(resolve, 300));
-  
+
   if (projectId) {
     return mockTestSuites.filter(suite => suite.project_id === projectId);
   }
@@ -254,7 +236,7 @@ export const mockGetTestSuites = async (projectId?: number): Promise<TestSuiteRe
 
 export const mockGetTestSuite = async (testSuiteId: number): Promise<TestSuiteResponse> => {
   await new Promise(resolve => setTimeout(resolve, 200));
-  
+
   const suite = mockTestSuites.find(s => s.id === testSuiteId);
   if (!suite) {
     throw new Error(`Test suite with id ${testSuiteId} not found`);
@@ -264,7 +246,7 @@ export const mockGetTestSuite = async (testSuiteId: number): Promise<TestSuiteRe
 
 export const mockCreateTestSuite = async (data: any): Promise<TestSuiteResponse> => {
   await new Promise(resolve => setTimeout(resolve, 400));
-  
+
   const newSuite: TestSuiteResponse = {
     id: Math.max(...mockTestSuites.map(s => s.id), 0) + 1,
     name: data.name,
@@ -282,37 +264,37 @@ export const mockCreateTestSuite = async (data: any): Promise<TestSuiteResponse>
     created_at: new Date().toISOString(),
     updated_at: null,
   };
-  
+
   mockTestSuites.push(newSuite);
   return newSuite;
 };
 
 export const mockUpdateTestSuite = async (testSuiteId: number, data: any): Promise<TestSuiteResponse> => {
   await new Promise(resolve => setTimeout(resolve, 300));
-  
+
   const suiteIndex = mockTestSuites.findIndex(s => s.id === testSuiteId);
   if (suiteIndex === -1) {
     throw new Error(`Test suite with id ${testSuiteId} not found`);
   }
-  
+
   const updatedSuite: TestSuiteResponse = {
     ...mockTestSuites[suiteIndex],
     ...data,
     updated_at: new Date().toISOString(),
   };
-  
+
   mockTestSuites[suiteIndex] = updatedSuite;
   return { ...updatedSuite };
 };
 
 export const mockDeleteTestSuite = async (testSuiteId: number): Promise<void> => {
   await new Promise(resolve => setTimeout(resolve, 250));
-  
+
   const suiteIndex = mockTestSuites.findIndex(s => s.id === testSuiteId);
   if (suiteIndex === -1) {
     throw new Error(`Test suite with id ${testSuiteId} not found`);
   }
-  
+
   mockTestSuites.splice(suiteIndex, 1);
 };
 
@@ -423,7 +405,7 @@ export const mockGetTestRun = async (testRunId: number): Promise<any> => {
 
 export const mockCreateTestRun = async (data: any): Promise<TestRunResponse> => {
   await new Promise(resolve => setTimeout(resolve, 400));
-  
+
   const newRun: TestRunResponse = {
     id: Math.max(...mockTestRuns.map(r => r.id), 0) + 1,
     test_suite_id: data.test_suite_id,
@@ -436,7 +418,7 @@ export const mockCreateTestRun = async (data: any): Promise<TestRunResponse> => 
     started_at: new Date().toISOString(),
     completed_at: null,
   };
-  
+
   mockTestRuns.push(newRun);
   return newRun;
 };
@@ -491,7 +473,7 @@ const mockScenarios: ScenarioResponse[] = [
 
 export const mockGetScenarios = async (testSuiteId?: number): Promise<ScenarioResponse[]> => {
   await new Promise(resolve => setTimeout(resolve, 300));
-  
+
   if (testSuiteId) {
     return mockScenarios.filter(s => s.test_suite_id === testSuiteId);
   }
@@ -500,7 +482,7 @@ export const mockGetScenarios = async (testSuiteId?: number): Promise<ScenarioRe
 
 export const mockGetScenario = async (scenarioId: number): Promise<ScenarioResponse> => {
   await new Promise(resolve => setTimeout(resolve, 200));
-  
+
   const scenario = mockScenarios.find(s => s.id === scenarioId);
   if (!scenario) {
     throw new Error(`Scenario with id ${scenarioId} not found`);
@@ -590,9 +572,9 @@ const mockSchedules: ScheduleResponse[] = [
 
 export const mockGetSchedules = async (params?: any): Promise<ScheduleResponse[]> => {
   await new Promise(resolve => setTimeout(resolve, 300));
-  
+
   let filtered = [...mockSchedules];
-  
+
   if (params?.project_id) {
     filtered = filtered.filter(s => s.project_id === params.project_id);
   }
@@ -602,13 +584,13 @@ export const mockGetSchedules = async (params?: any): Promise<ScheduleResponse[]
   if (params?.is_active !== undefined) {
     filtered = filtered.filter(s => s.is_active === params.is_active);
   }
-  
+
   return filtered;
 };
 
 export const mockGetSchedule = async (scheduleId: number): Promise<ScheduleResponse> => {
   await new Promise(resolve => setTimeout(resolve, 200));
-  
+
   const schedule = mockSchedules.find(s => s.id === scheduleId);
   if (!schedule) {
     throw new Error(`Schedule with id ${scheduleId} not found`);
@@ -618,7 +600,7 @@ export const mockGetSchedule = async (scheduleId: number): Promise<ScheduleRespo
 
 export const mockCreateSchedule = async (data: any): Promise<ScheduleResponse> => {
   await new Promise(resolve => setTimeout(resolve, 400));
-  
+
   const newSchedule: ScheduleResponse = {
     id: Math.max(...mockSchedules.map(s => s.id), 0) + 1,
     project_id: data.project_id,
@@ -643,37 +625,37 @@ export const mockCreateSchedule = async (data: any): Promise<ScheduleResponse> =
       project_id: data.project_id,
     } : null,
   };
-  
+
   mockSchedules.push(newSchedule);
   return newSchedule;
 };
 
 export const mockUpdateSchedule = async (scheduleId: number, data: any): Promise<ScheduleResponse> => {
   await new Promise(resolve => setTimeout(resolve, 300));
-  
+
   const scheduleIndex = mockSchedules.findIndex(s => s.id === scheduleId);
   if (scheduleIndex === -1) {
     throw new Error(`Schedule with id ${scheduleId} not found`);
   }
-  
+
   const updatedSchedule: ScheduleResponse = {
     ...mockSchedules[scheduleIndex],
     ...data,
     updated_at: new Date().toISOString(),
   };
-  
+
   mockSchedules[scheduleIndex] = updatedSchedule;
   return { ...updatedSchedule };
 };
 
 export const mockDeleteSchedule = async (scheduleId: number): Promise<void> => {
   await new Promise(resolve => setTimeout(resolve, 250));
-  
+
   const scheduleIndex = mockSchedules.findIndex(s => s.id === scheduleId);
   if (scheduleIndex === -1) {
     throw new Error(`Schedule with id ${scheduleId} not found`);
   }
-  
+
   mockSchedules.splice(scheduleIndex, 1);
 };
 
@@ -724,7 +706,7 @@ export const mockGetSecrets = async (): Promise<SecretResponse[]> => {
 
 export const mockGetSecret = async (secretId: number): Promise<SecretResponse> => {
   await new Promise(resolve => setTimeout(resolve, 200));
-  
+
   const secret = mockSecrets.find(s => s.id === secretId);
   if (!secret) {
     throw new Error(`Secret with id ${secretId} not found`);
@@ -734,11 +716,11 @@ export const mockGetSecret = async (secretId: number): Promise<SecretResponse> =
 
 export const mockCreateSecret = async (data: any): Promise<SecretResponse> => {
   await new Promise(resolve => setTimeout(resolve, 400));
-  
-  const maskedValue = data.value.length > 4 
+
+  const maskedValue = data.value.length > 4
     ? `${data.value.substring(0, 2)}*****${data.value.substring(data.value.length - 2)}`
     : "*****";
-  
+
   const newSecret: SecretResponse = {
     id: Math.max(...mockSecrets.map(s => s.id), 0) + 1,
     name: data.name,
@@ -747,61 +729,61 @@ export const mockCreateSecret = async (data: any): Promise<SecretResponse> => {
     created_at: new Date().toISOString(),
     updated_at: null,
   };
-  
+
   mockSecrets.push(newSecret);
   return newSecret;
 };
 
 export const mockUpdateSecret = async (secretId: number, data: any): Promise<SecretResponse> => {
   await new Promise(resolve => setTimeout(resolve, 300));
-  
+
   const secretIndex = mockSecrets.findIndex(s => s.id === secretId);
   if (secretIndex === -1) {
     throw new Error(`Secret with id ${secretId} not found`);
   }
-  
+
   const updatedSecret: SecretResponse = {
     ...mockSecrets[secretIndex],
     ...data,
     updated_at: new Date().toISOString(),
   };
-  
+
   if (data.value) {
-    updatedSecret.value_masked = data.value.length > 4 
+    updatedSecret.value_masked = data.value.length > 4
       ? `${data.value.substring(0, 2)}*****${data.value.substring(data.value.length - 2)}`
       : "*****";
   }
-  
+
   mockSecrets[secretIndex] = updatedSecret;
   return { ...updatedSecret };
 };
 
 export const mockDeleteSecret = async (secretId: number): Promise<void> => {
   await new Promise(resolve => setTimeout(resolve, 250));
-  
+
   const secretIndex = mockSecrets.findIndex(s => s.id === secretId);
   if (secretIndex === -1) {
     throw new Error(`Secret with id ${secretId} not found`);
   }
-  
+
   mockSecrets.splice(secretIndex, 1);
 };
 
 export const mockRevealSecret = async (secretId: number): Promise<{ value: string }> => {
   await new Promise(resolve => setTimeout(resolve, 200));
-  
+
   const secret = mockSecrets.find(s => s.id === secretId);
   if (!secret) {
     throw new Error(`Secret with id ${secretId} not found`);
   }
-  
+
   // Return mock revealed value
   const revealedValues: Record<number, string> = {
     1: "sk-live-abc123xyz789",
     2: "testuser@example.com",
     3: "SecurePassword123!",
   };
-  
+
   return { value: revealedValues[secretId] || "mock-value" };
 };
 
@@ -818,7 +800,7 @@ export interface DashboardStatistics {
 
 export const mockGetDashboardStatistics = async (params?: any): Promise<DashboardStatistics> => {
   await new Promise(resolve => setTimeout(resolve, 300));
-  
+
   // Calculate from mock test runs
   const allRuns = mockTestRuns.filter(run => {
     if (params?.project_id) {
@@ -827,13 +809,13 @@ export const mockGetDashboardStatistics = async (params?: any): Promise<Dashboar
     }
     return true;
   });
-  
+
   const totalRuns = allRuns.length;
   const passedScenarios = allRuns.reduce((sum, run) => sum + run.passed_scenarios, 0);
   const failedScenarios = allRuns.reduce((sum, run) => sum + run.failed_scenarios, 0);
   const totalScenarios = passedScenarios + failedScenarios;
   const successRate = totalScenarios > 0 ? (passedScenarios / totalScenarios) * 100 : 0;
-  
+
   return {
     total_test_runs: totalRuns,
     passed_scenarios: passedScenarios,
@@ -844,19 +826,19 @@ export const mockGetDashboardStatistics = async (params?: any): Promise<Dashboar
 
 export const mockGetRecentTestRuns = async (params?: any): Promise<TestRunResponse[]> => {
   await new Promise(resolve => setTimeout(resolve, 300));
-  
+
   let runs = [...mockTestRuns];
-  
+
   if (params?.project_id) {
     const suiteIds = mockTestSuites
       .filter(s => s.project_id === params.project_id)
       .map(s => s.id);
     runs = runs.filter(r => suiteIds.includes(r.test_suite_id));
   }
-  
+
   // Sort by started_at descending
   runs.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
-  
+
   // Apply limit
   const limit = params?.limit || 10;
   return runs.slice(0, limit);

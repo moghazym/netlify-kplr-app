@@ -40,29 +40,9 @@ const logAuth = (...args: any[]) => {
 };
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  // Mock user for development mode
-  const getMockUser = (): User => ({
-    id: 'dev-user-123',
-    name: 'Dev User',
-    email: 'dev@usekplr.com',
-    picture: undefined,
-  });
-
   // Initialize user from storage synchronously to avoid race conditions
   const getInitialUser = (): User | null => {
-    // In development mode, skip auth and use mock user
-    if (import.meta.env.DEV) {
-      const storedUser = getUserFromStorage();
-      if (storedUser) {
-        logAuth('Restored mock user from storage');
-        return storedUser;
-      }
-      // Create and save mock user for dev
-      const mockUser = getMockUser();
-      saveUserToStorage(mockUser);
-        logAuth('Created mock user for dev mode');
-      return mockUser;
-    }
+    // Check for auth token in URL (e.g., after OAuth redirect)
 
     // In production, check for auth token
     if (typeof window !== 'undefined') {
@@ -82,19 +62,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     let isMounted = true;
     const initAuth = async () => {
-      if (import.meta.env.DEV) {
-        const storedUser = getUserFromStorage();
-        if (!storedUser) {
-          const mockUser = getMockUser();
-          saveUserToStorage(mockUser);
-          if (isMounted) setUser(mockUser);
-        } else if (!user) {
-          setUser(storedUser);
-        }
-        setLoading(false);
-        return;
-      }
-
       try {
         logAuth('Fetching /api/auth/me for session hydration');
         const me = await apiGet<User>('/api/auth/me');
@@ -104,10 +71,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           logAuth('Hydrated authenticated user from backend', me);
         }
       } catch (err) {
-        logAuth('Failed to hydrate session', err);
+        logAuth('Failed to hydrate session - will redirect to auth', err);
         if (isMounted) {
           setUser(null);
           clearUserFromStorage();
+          // Don't redirect here - let ProtectedRoute handle it
         }
       } finally {
         if (isMounted) setLoading(false);

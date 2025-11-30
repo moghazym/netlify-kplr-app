@@ -2,12 +2,12 @@
  * API Client for making authenticated requests
  */
 
-import { 
-  shouldUseMockApi, 
-  mockGetProjects, 
-  mockCreateProject, 
-  mockGetProject, 
-  mockUpdateProject, 
+import {
+  shouldUseMockApi,
+  mockGetProjects,
+  mockCreateProject,
+  mockGetProject,
+  mockUpdateProject,
   mockDeleteProject,
   mockGetTestSuites,
   mockGetTestSuite,
@@ -49,7 +49,7 @@ export const apiRequest = async <T = any>(
   if (shouldUseMockApi()) {
     return handleMockRequest<T>(endpoint, options);
   }
-  
+
   const headers: Record<string, string> = {
     ...(options.headers as Record<string, string>),
   };
@@ -60,27 +60,35 @@ export const apiRequest = async <T = any>(
   if (!isFormData && options.body && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
-  
-  const url = endpoint.startsWith('http') 
-    ? endpoint 
+
+  // Add Authorization header if we have a token
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+    if (token && !headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
+  const url = endpoint.startsWith('http')
+    ? endpoint
     : `${API_BASE_URL}${endpoint}`;
-  
+
   const response = await fetch(url, {
     ...options,
     headers,
     credentials: 'include',
   });
-  
+
   if (!response.ok) {
     let errorData: any;
     try {
       errorData = await response.json();
     } catch {
       errorData = {
-      detail: `HTTP ${response.status}: ${response.statusText}`,
+        detail: `HTTP ${response.status}: ${response.statusText}`,
       };
     }
-    
+
     // Handle HTTPValidationError format from OpenAPI spec
     if (errorData.detail && Array.isArray(errorData.detail)) {
       // Validation error with multiple field errors
@@ -90,17 +98,17 @@ export const apiRequest = async <T = any>(
       }).join(', ');
       throw new Error(errorMessages || 'Validation error');
     }
-    
+
     // Handle single detail string or message
     const errorMessage = errorData.detail || errorData.message || `HTTP ${response.status}: ${response.statusText}`;
     throw new Error(errorMessage);
   }
-  
+
   // Handle 204 No Content responses
   if (response.status === 204) {
     return undefined as T;
   }
-  
+
   return response.json();
 };
 
@@ -112,16 +120,16 @@ const handleMockRequest = async <T = any>(
   options: RequestInit = {}
 ): Promise<T> => {
   const method = options.method || 'GET';
-  
+
   // ============================================================================
   // Projects API
   // ============================================================================
-  
+
   // Handle GET /api/projects/
   if (method === 'GET' && endpoint.includes('/api/projects/') && !endpoint.match(/\/api\/projects\/\d+$/)) {
     return mockGetProjects() as Promise<T>;
   }
-  
+
   // Handle GET /api/projects/{id}
   if (method === 'GET' && endpoint.match(/\/api\/projects\/\d+$/)) {
     const match = endpoint.match(/\/api\/projects\/(\d+)$/);
@@ -130,13 +138,13 @@ const handleMockRequest = async <T = any>(
       return mockGetProject(projectId) as Promise<T>;
     }
   }
-  
+
   // Handle POST /api/projects/
   if (method === 'POST' && endpoint.includes('/api/projects/') && !endpoint.match(/\/api\/projects\/\d+$/)) {
     const body = options.body ? JSON.parse(options.body as string) : {};
     return mockCreateProject(body) as Promise<T>;
   }
-  
+
   // Handle PUT /api/projects/{id}
   if (method === 'PUT' && endpoint.match(/\/api\/projects\/\d+$/)) {
     const match = endpoint.match(/\/api\/projects\/(\d+)$/);
@@ -146,7 +154,7 @@ const handleMockRequest = async <T = any>(
       return mockUpdateProject(projectId, body) as Promise<T>;
     }
   }
-  
+
   // Handle DELETE /api/projects/{id}
   if (method === 'DELETE' && endpoint.match(/\/api\/projects\/\d+$/)) {
     const match = endpoint.match(/\/api\/projects\/(\d+)$/);
@@ -156,11 +164,11 @@ const handleMockRequest = async <T = any>(
       return undefined as T;
     }
   }
-  
+
   // ============================================================================
   // Test Suites API
   // ============================================================================
-  
+
   // Handle GET /api/test-suites/
   if (method === 'GET' && endpoint.includes('/api/test-suites/')) {
     let parsedProjectId: number | undefined;
@@ -177,7 +185,7 @@ const handleMockRequest = async <T = any>(
     }
     return mockGetTestSuites(parsedProjectId) as Promise<T>;
   }
-  
+
   // Handle GET /api/test-suites/{id}
   if (method === 'GET' && endpoint.match(/\/api\/test-suites\/\d+$/)) {
     const match = endpoint.match(/\/api\/test-suites\/(\d+)$/);
@@ -186,13 +194,13 @@ const handleMockRequest = async <T = any>(
       return mockGetTestSuite(testSuiteId) as Promise<T>;
     }
   }
-  
+
   // Handle POST /api/test-suites/
   if (method === 'POST' && endpoint.includes('/api/test-suites/')) {
     const body = options.body ? JSON.parse(options.body as string) : {};
     return mockCreateTestSuite(body) as Promise<T>;
   }
-  
+
   // Handle PUT /api/test-suites/{id}
   if (method === 'PUT' && endpoint.match(/\/api\/test-suites\/\d+$/)) {
     const match = endpoint.match(/\/api\/test-suites\/(\d+)$/);
@@ -202,7 +210,7 @@ const handleMockRequest = async <T = any>(
       return mockUpdateTestSuite(testSuiteId, body) as Promise<T>;
     }
   }
-  
+
   // Handle DELETE /api/test-suites/{id}
   if (method === 'DELETE' && endpoint.match(/\/api\/test-suites\/\d+$/)) {
     const match = endpoint.match(/\/api\/test-suites\/(\d+)$/);
@@ -212,11 +220,11 @@ const handleMockRequest = async <T = any>(
       return undefined as T;
     }
   }
-  
+
   // ============================================================================
   // Test Runs API
   // ============================================================================
-  
+
   // Handle GET /api/test-runs/suite/{id}/runs
   if (method === 'GET' && endpoint.match(/\/api\/test-runs\/suite\/\d+\/runs/)) {
     const match = endpoint.match(/\/api\/test-runs\/suite\/(\d+)\/runs/);
@@ -225,7 +233,7 @@ const handleMockRequest = async <T = any>(
       return mockGetTestRunsForSuite(testSuiteId) as Promise<T>;
     }
   }
-  
+
   // Handle GET /api/test-runs/suite/{id}/latest
   if (method === 'GET' && endpoint.match(/\/api\/test-runs\/suite\/\d+\/latest/)) {
     const match = endpoint.match(/\/api\/test-runs\/suite\/(\d+)\/latest/);
@@ -234,7 +242,7 @@ const handleMockRequest = async <T = any>(
       return mockGetLatestTestRun(testSuiteId) as Promise<T>;
     }
   }
-  
+
   // Handle GET /api/test-runs/{id}
   if (method === 'GET' && endpoint.match(/\/api\/test-runs\/\d+$/)) {
     const match = endpoint.match(/\/api\/test-runs\/(\d+)$/);
@@ -243,17 +251,17 @@ const handleMockRequest = async <T = any>(
       return mockGetTestRun(testRunId) as Promise<T>;
     }
   }
-  
+
   // Handle POST /api/test-runs/
   if (method === 'POST' && endpoint.includes('/api/test-runs/')) {
     const body = options.body ? JSON.parse(options.body as string) : {};
     return mockCreateTestRun(body) as Promise<T>;
   }
-  
+
   // ============================================================================
   // Scenarios API
   // ============================================================================
-  
+
   // Handle GET /api/scenarios/
   if (method === 'GET' && endpoint.includes('/api/scenarios/')) {
     let parsedTestSuiteId: number | undefined;
@@ -270,7 +278,7 @@ const handleMockRequest = async <T = any>(
     }
     return mockGetScenarios(parsedTestSuiteId) as Promise<T>;
   }
-  
+
   // Handle GET /api/scenarios/{id}
   if (method === 'GET' && endpoint.match(/\/api\/scenarios\/\d+$/)) {
     const match = endpoint.match(/\/api\/scenarios\/(\d+)$/);
@@ -279,11 +287,11 @@ const handleMockRequest = async <T = any>(
       return mockGetScenario(scenarioId) as Promise<T>;
     }
   }
-  
+
   // ============================================================================
   // Schedules API
   // ============================================================================
-  
+
   // Handle GET /api/schedules/
   if (method === 'GET' && endpoint.includes('/api/schedules/')) {
     const params: any = {};
@@ -315,7 +323,7 @@ const handleMockRequest = async <T = any>(
     }
     return mockGetSchedules(params) as Promise<T>;
   }
-  
+
   // Handle GET /api/schedules/{id}
   if (method === 'GET' && endpoint.match(/\/api\/schedules\/\d+$/)) {
     const match = endpoint.match(/\/api\/schedules\/(\d+)$/);
@@ -324,13 +332,13 @@ const handleMockRequest = async <T = any>(
       return mockGetSchedule(scheduleId) as Promise<T>;
     }
   }
-  
+
   // Handle POST /api/schedules/
   if (method === 'POST' && endpoint.includes('/api/schedules/')) {
     const body = options.body ? JSON.parse(options.body as string) : {};
     return mockCreateSchedule(body) as Promise<T>;
   }
-  
+
   // Handle PUT /api/schedules/{id}
   if (method === 'PUT' && endpoint.match(/\/api\/schedules\/\d+$/)) {
     const match = endpoint.match(/\/api\/schedules\/(\d+)$/);
@@ -340,7 +348,7 @@ const handleMockRequest = async <T = any>(
       return mockUpdateSchedule(scheduleId, body) as Promise<T>;
     }
   }
-  
+
   // Handle DELETE /api/schedules/{id}
   if (method === 'DELETE' && endpoint.match(/\/api\/schedules\/\d+$/)) {
     const match = endpoint.match(/\/api\/schedules\/(\d+)$/);
@@ -350,16 +358,16 @@ const handleMockRequest = async <T = any>(
       return undefined as T;
     }
   }
-  
+
   // ============================================================================
   // Secrets API
   // ============================================================================
-  
+
   // Handle GET /api/secrets/
   if (method === 'GET' && endpoint.includes('/api/secrets/') && !endpoint.includes('/reveal')) {
     return mockGetSecrets() as Promise<T>;
   }
-  
+
   // Handle GET /api/secrets/{id}
   if (method === 'GET' && endpoint.match(/\/api\/secrets\/\d+$/) && !endpoint.includes('/reveal')) {
     const match = endpoint.match(/\/api\/secrets\/(\d+)$/);
@@ -368,7 +376,7 @@ const handleMockRequest = async <T = any>(
       return mockGetSecret(secretId) as Promise<T>;
     }
   }
-  
+
   // Handle GET /api/secrets/{id}/reveal
   if (method === 'GET' && endpoint.match(/\/api\/secrets\/\d+\/reveal/)) {
     const match = endpoint.match(/\/api\/secrets\/(\d+)\/reveal/);
@@ -377,13 +385,13 @@ const handleMockRequest = async <T = any>(
       return mockRevealSecret(secretId) as Promise<T>;
     }
   }
-  
+
   // Handle POST /api/secrets/
   if (method === 'POST' && endpoint.includes('/api/secrets/')) {
     const body = options.body ? JSON.parse(options.body as string) : {};
     return mockCreateSecret(body) as Promise<T>;
   }
-  
+
   // Handle PATCH /api/secrets/{id}
   if (method === 'PATCH' && endpoint.match(/\/api\/secrets\/\d+$/)) {
     const match = endpoint.match(/\/api\/secrets\/(\d+)$/);
@@ -393,7 +401,7 @@ const handleMockRequest = async <T = any>(
       return mockUpdateSecret(secretId, body) as Promise<T>;
     }
   }
-  
+
   // Handle DELETE /api/secrets/{id}
   if (method === 'DELETE' && endpoint.match(/\/api\/secrets\/\d+$/)) {
     const match = endpoint.match(/\/api\/secrets\/(\d+)$/);
@@ -403,11 +411,11 @@ const handleMockRequest = async <T = any>(
       return undefined as T;
     }
   }
-  
+
   // ============================================================================
   // Dashboard API
   // ============================================================================
-  
+
   // Handle GET /api/dashboard/statistics
   if (method === 'GET' && endpoint.includes('/api/dashboard/statistics')) {
     const params: any = {};
@@ -439,7 +447,7 @@ const handleMockRequest = async <T = any>(
     }
     return mockGetDashboardStatistics(params) as Promise<T>;
   }
-  
+
   // Handle GET /api/dashboard/recent-runs
   if (method === 'GET' && endpoint.includes('/api/dashboard/recent-runs')) {
     const params: any = {};
@@ -464,7 +472,7 @@ const handleMockRequest = async <T = any>(
     }
     return mockGetRecentTestRuns(params) as Promise<T>;
   }
-  
+
   // Fallback: return empty array or throw error
   console.warn(`Mock API: Unhandled endpoint ${method} ${endpoint}`);
   return [] as T;
@@ -658,7 +666,7 @@ export interface TestSuiteUpdate {
  * Get all test suites
  */
 export const getTestSuites = async (projectId?: number): Promise<TestSuiteResponse[]> => {
-  const endpoint = projectId 
+  const endpoint = projectId
     ? `/api/test-suites/?project_id=${projectId}`
     : '/api/test-suites/';
   return apiGet<TestSuiteResponse[]>(endpoint);
@@ -800,7 +808,7 @@ export interface TestRunUpdate {
  * Get test runs for a specific test suite
  */
 export const getTestRunsForSuite = async (testSuiteId: number, limit?: number): Promise<TestRunResponse[]> => {
-  const endpoint = limit 
+  const endpoint = limit
     ? `/api/test-runs/suite/${testSuiteId}/runs?limit=${limit}`
     : `/api/test-runs/suite/${testSuiteId}/runs`;
   return apiGet<TestRunResponse[]>(endpoint);
@@ -885,7 +893,7 @@ export interface ScenarioUpdate {
  * Get scenarios for a test suite
  */
 export const getScenarios = async (testSuiteId?: number): Promise<ScenarioResponse[]> => {
-  const endpoint = testSuiteId 
+  const endpoint = testSuiteId
     ? `/api/scenarios/?test_suite_id=${testSuiteId}`
     : '/api/scenarios/';
   return apiGet<ScenarioResponse[]>(endpoint);
@@ -1129,8 +1137,8 @@ export const getSchedules = async (params?: {
   if (params?.project_id) queryParams.append('project_id', params.project_id.toString());
   if (params?.test_suite_id) queryParams.append('test_suite_id', params.test_suite_id.toString());
   if (params?.is_active !== undefined) queryParams.append('is_active', params.is_active.toString());
-  
-  const endpoint = queryParams.toString() 
+
+  const endpoint = queryParams.toString()
     ? `/api/schedules/?${queryParams.toString()}`
     : '/api/schedules/';
   return apiGet<ScheduleResponse[]>(endpoint);
@@ -1161,7 +1169,7 @@ export const updateSchedule = async (scheduleId: number, data: ScheduleUpdate): 
  * Delete a schedule
  */
 export const deleteSchedule = async (scheduleId: number, hard?: boolean): Promise<void> => {
-  const endpoint = hard 
+  const endpoint = hard
     ? `/api/schedules/${scheduleId}?hard=true`
     : `/api/schedules/${scheduleId}`;
   return apiDelete(endpoint);
@@ -1204,8 +1212,8 @@ export const getDashboardStatistics = async (params?: {
   if (params?.project_id) queryParams.append('project_id', params.project_id.toString());
   if (params?.start_date) queryParams.append('start_date', params.start_date);
   if (params?.end_date) queryParams.append('end_date', params.end_date);
-  
-  const endpoint = queryParams.toString() 
+
+  const endpoint = queryParams.toString()
     ? `/api/dashboard/statistics?${queryParams.toString()}`
     : '/api/dashboard/statistics';
   return apiGet<DashboardStatistics>(endpoint);
@@ -1221,8 +1229,8 @@ export const getRecentTestRuns = async (params?: {
   const queryParams = new URLSearchParams();
   if (params?.project_id) queryParams.append('project_id', params.project_id.toString());
   if (params?.limit) queryParams.append('limit', params.limit.toString());
-  
-  const endpoint = queryParams.toString() 
+
+  const endpoint = queryParams.toString()
     ? `/api/dashboard/recent-runs?${queryParams.toString()}`
     : '/api/dashboard/recent-runs';
   return apiGet<RecentRun[]>(endpoint);
