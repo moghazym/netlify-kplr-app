@@ -127,11 +127,11 @@ export function AppSidebar() {
         <SidebarHeader className="border-b border-sidebar-border">
           {!collapsed && (
             <div className="flex items-center gap-2 px-2">
-              <img src={logoImage} alt="Kplr" className="w-8 h-8 rounded" />
+              <img src={logoImage} alt="Kplr" className="w-12 h-12 rounded" />
             </div>
           )}
           {collapsed && (
-            <img src={logoImage} alt="Kplr" className="w-8 h-8 rounded mx-auto" />
+            <img src={logoImage} alt="Kplr" className="w-12 h-12 rounded mx-auto" />
           )}
         </SidebarHeader>
         <SidebarContent>

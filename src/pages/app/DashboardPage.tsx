@@ -310,7 +310,7 @@ export const DashboardPage: React.FC = () => {
       {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <img src={logoImage} alt="Kplr" className="w-8 h-8 rounded" />
+          <img src={logoImage} alt="Kplr" className="w-12 h-12 rounded" />
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" className="w-[280px] justify-start text-left font-normal">

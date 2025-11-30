@@ -34,6 +34,8 @@ import {
   mockGetDashboardStatistics,
   mockGetRecentTestRuns,
 } from './mock-api';
+import { clearUserFromStorage } from './auth-storage';
+import { redirectToAuth } from './auth-redirect';
 
 // Get the API base URL from environment variable or use a default
 // In development, we use the Vite proxy, so we leave this empty to use relative URLs
@@ -118,6 +120,41 @@ export const apiRequest = async <T = any>(
 
     // Handle single detail string or message
     const errorMessage = errorData.detail || errorData.message || `HTTP ${response.status}: ${response.statusText}`;
+    
+    // Check for credential validation error and trigger re-authentication
+    // This handles both the specific error message and 401 Unauthorized status
+    const isCredentialError = (typeof errorMessage === 'string' && 
+        errorMessage.toLowerCase().includes('could not validate credentials')) ||
+        response.status === 401;
+    
+    if (isCredentialError) {
+      console.warn('[API] Credential validation failed, triggering re-authentication', {
+        status: response.status,
+        errorMessage,
+      });
+      
+      // Clear auth state
+      clearUserFromStorage();
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token');
+        sessionStorage.removeItem('access_token');
+      }
+      
+      // Only redirect if we're not already on the callback or auth page
+      if (typeof window !== 'undefined') {
+        const currentPath = window.location.pathname;
+        if (currentPath !== '/callback' && !currentPath.includes('/auth')) {
+          // Store the current path to redirect back after auth
+          // Default to dashboard if we're on the root
+          const redirectPath = currentPath === '/' ? '/dashboard' : currentPath;
+          sessionStorage.setItem('auth_redirect_path', redirectPath);
+          
+          // Trigger authentication flow
+          redirectToAuth(redirectPath);
+        }
+      }
+    }
+    
     throw new Error(errorMessage);
   }
 
@@ -848,14 +885,18 @@ export const getLatestTestRun = async (testSuiteId: number): Promise<TestRunResp
 
 export interface TestRunStep {
   id: number;
+  step_number?: number;
   action?: string;
+  action_summary?: string;
   reasoning?: string;
   status?: string;
   screenshot?: string;
   before_screenshot?: string;
   after_screenshot?: string;
-  console_logs?: string[];
-  network_logs?: string[];
+  before_screenshot_url?: string;
+  after_screenshot_url?: string;
+  console_logs?: any[];
+  network_logs?: any[];
   created_at?: string;
 }
 
