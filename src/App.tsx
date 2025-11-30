@@ -5,6 +5,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
+import { ProjectProvider } from "./contexts/ProjectContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AppLayout } from "./components/app/AppLayout";
 import { DashboardPage } from "./pages/app/DashboardPage";
@@ -22,7 +23,8 @@ import "./App.css";
 function App() {
   return (
     <AuthProvider>
-      <Router>
+      <ProjectProvider>
+        <Router>
         <Routes>
           {/* Callback route should not be protected - it handles its own auth flow */}
           <Route path="/callback" element={<AuthCallbackPage />} />
@@ -48,6 +50,7 @@ function App() {
         </Routes>
         <Toaster />
       </Router>
+      </ProjectProvider>
     </AuthProvider>
   );
 }

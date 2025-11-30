@@ -4,26 +4,35 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Button } from "../../components/ui/button";
 import { Plus, Loader2 } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { useProject } from "../../contexts/ProjectContext";
 import { getTestSuites, TestSuiteResponse } from "../../lib/api-client";
 import { useToast } from "../../hooks/use-toast";
 
 export const TestSuitesPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { selectedProject } = useProject();
   const { toast } = useToast();
   const [testSuites, setTestSuites] = useState<TestSuiteResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
+    if (user && selectedProject) {
       loadTestSuites();
+    } else if (user && !selectedProject) {
+      setIsLoading(false);
     }
-  }, [user]);
+  }, [user, selectedProject]);
 
   const loadTestSuites = async () => {
+    if (!selectedProject) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
-      const suites = await getTestSuites();
+      const suites = await getTestSuites(selectedProject.id);
       setTestSuites(suites);
     } catch (error) {
       console.error("Error loading test suites:", error);

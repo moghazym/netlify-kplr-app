@@ -824,9 +824,17 @@ export interface TestRunUpdate {
 /**
  * Get test runs for a specific test suite
  */
-export const getTestRunsForSuite = async (testSuiteId: number, limit?: number): Promise<TestRunResponse[]> => {
-  const endpoint = limit
-    ? `/api/test-runs/suite/${testSuiteId}/runs?limit=${limit}`
+export const getTestRunsForSuite = async (testSuiteId: number, limit?: number, offset?: number): Promise<TestRunResponse[]> => {
+  const queryParams = new URLSearchParams();
+  if (limit !== undefined) {
+    queryParams.append('limit', limit.toString());
+  }
+  if (offset !== undefined) {
+    queryParams.append('offset', offset.toString());
+  }
+  const queryString = queryParams.toString();
+  const endpoint = queryString
+    ? `/api/test-runs/suite/${testSuiteId}/runs?${queryString}`
     : `/api/test-runs/suite/${testSuiteId}/runs`;
   return apiGet<TestRunResponse[]>(endpoint);
 };
@@ -838,8 +846,39 @@ export const getLatestTestRun = async (testSuiteId: number): Promise<TestRunResp
   return apiGet<TestRunResponse | null>(`/api/test-runs/suite/${testSuiteId}/latest`);
 };
 
+export interface TestRunStep {
+  id: number;
+  action?: string;
+  reasoning?: string;
+  status?: string;
+  screenshot?: string;
+  before_screenshot?: string;
+  after_screenshot?: string;
+  console_logs?: string[];
+  network_logs?: string[];
+  created_at?: string;
+}
+
+export interface TestRunScenario {
+  id: number;
+  name: string;
+  status?: string;
+  steps?: TestRunStep[];
+}
+
+export interface TestRunSession {
+  id?: string;
+  scenario_id?: number;
+  scenario?: TestRunScenario;
+  steps?: TestRunStep[];
+  console_logs?: string[];
+  network_logs?: string[];
+  screenshots?: string[];
+}
+
 export interface TestRunWithSessionsResponse extends TestRunResponse {
-  sessions: any[]; // Sessions array from the API
+  sessions: TestRunSession[];
+  scenarios?: TestRunScenario[];
 }
 
 /**
@@ -864,8 +903,15 @@ export interface CloudRunTriggerRequest {
   options?: { max_steps?: number };
 }
 
-export const triggerCloudRun = async (data: CloudRunTriggerRequest): Promise<any> => {
-  return apiPost('/api/cloud-run/trigger', data);
+export interface CloudRunTriggerResponse {
+  status: string;
+  schedule_id: string;
+  message_id: string;
+  test_run_id: number;
+}
+
+export const triggerCloudRun = async (data: CloudRunTriggerRequest): Promise<CloudRunTriggerResponse> => {
+  return apiPost<CloudRunTriggerResponse>('/api/cloud-run/trigger', data);
 };
 
 /**

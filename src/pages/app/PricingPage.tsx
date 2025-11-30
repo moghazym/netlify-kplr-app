@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DollarSign, TrendingUp, Calendar, Download } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProject } from "@/contexts/ProjectContext";
 import { useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { getTestSuites, getTestRunsForSuite } from "@/lib/api-client";
@@ -47,6 +48,7 @@ interface DateRange {
 
 export default function PricingPage() {
   const { user } = useAuth();
+  const { selectedProject } = useProject();
   const { toast } = useToast();
   const [stats, setStats] = useState<UsageStats>({
     totalExecutions: 0,
@@ -65,17 +67,24 @@ export default function PricingPage() {
   });
 
   useEffect(() => {
-    if (user) {
+    if (user && selectedProject) {
       fetchUsageData();
+    } else if (user && !selectedProject) {
+      setLoading(false);
     }
-  }, [user, dateRange]);
+  }, [user, selectedProject, dateRange]);
 
   const fetchUsageData = async () => {
+    if (!selectedProject) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
 
-      // Get all test suites for the user
-      const testSuites = await getTestSuites();
+      // Get all test suites for the selected project
+      const testSuites = await getTestSuites(selectedProject.id);
       
       // Fetch test runs for all suites
       const allRunsPromises = testSuites.map(suite => 

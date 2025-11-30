@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProject } from "@/contexts/ProjectContext";
 import { useToast } from "@/hooks/use-toast";
 import { getTestSuites, createSchedule, type TestSuiteResponse, type ScheduleCreate } from "@/lib/api-client";
 
@@ -34,6 +35,7 @@ export function CreateScheduleDialog({
   onSuccess,
 }: CreateScheduleDialogProps) {
   const { user } = useAuth();
+  const { selectedProject } = useProject();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [testSuites, setTestSuites] = useState<TestSuiteResponse[]>([]);
@@ -48,14 +50,18 @@ export function CreateScheduleDialog({
   });
 
   useEffect(() => {
-    if (open && user) {
+    if (open && user && selectedProject) {
       fetchTestSuites();
     }
-  }, [open, user]);
+  }, [open, user, selectedProject]);
 
   const fetchTestSuites = async () => {
+    if (!selectedProject) {
+      return;
+    }
+
     try {
-      const suites = await getTestSuites();
+      const suites = await getTestSuites(selectedProject.id);
       setTestSuites(suites);
     } catch (error) {
       console.error('Error fetching test suites:', error);

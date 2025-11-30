@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import logoImage from "../../assets/logo-D_k9ADKT.png";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
@@ -20,15 +21,22 @@ import {
   Terminal,
   Copy,
   Check,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Textarea } from "../../components/ui/textarea";
 import { Input } from "../../components/ui/input";
 import { useAuth } from "../../contexts/AuthContext";
+import { useProject } from "../../contexts/ProjectContext";
 import { cn } from "../../lib/utils";
 import { 
   getTestSuite, 
-  getScenarios
+  getScenarios,
+  triggerCloudRun,
+  getTestRun,
+  CloudRunTriggerResponse,
+  TestRunWithSessionsResponse
 } from "../../lib/api-client";
 import { useToast } from "../../hooks/use-toast";
 
@@ -57,6 +65,7 @@ export const TestSuiteRunsPage: React.FC = () => {
   const { suiteId } = useParams<{ suiteId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { selectedProject } = useProject();
   const { toast } = useToast();
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [selectedStepIndex, setSelectedStepIndex] = useState(0);
@@ -82,12 +91,35 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [suiteInfo, setSuiteInfo] = useState<{ name: string; description?: string } | null>(null);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [currentTestRunId, setCurrentTestRunId] = useState<number | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [currentScreenshotIndex, setCurrentScreenshotIndex] = useState(0);
 
   useEffect(() => {
     if (suiteId && user) {
       loadSuiteData();
     }
   }, [suiteId, user]);
+
+  // Cleanup polling on unmount or when suiteId changes
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        setPollingInterval(null);
+      }
+    };
+  }, [pollingInterval]);
+
+  // Stop polling if suiteId changes
+  useEffect(() => {
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+      setIsRunningAll(false);
+      setCurrentTestRunId(null);
+    }
+  }, [suiteId]);
 
   const loadSuiteData = async () => {
     try {
@@ -356,32 +388,259 @@ export const TestSuiteRunsPage: React.FC = () => {
     await executeScenario(scenarioId, scenarioName);
   };
 
+  // Map API response to UI state
+  const mapTestRunToScenarios = (testRun: TestRunWithSessionsResponse): Scenario[] => {
+    const mappedScenarios: Scenario[] = [];
+    
+    // If scenarios are directly in the response
+    if (testRun.scenarios && testRun.scenarios.length > 0) {
+      testRun.scenarios.forEach((apiScenario) => {
+        const steps: Step[] = (apiScenario.steps || []).map((apiStep) => {
+          // Determine step status - if completed, check if it passed or failed
+          let stepStatus: "pending" | "running" | "passed" | "failed" = "pending";
+          if (apiStep.status) {
+            stepStatus = apiStep.status as "pending" | "running" | "passed" | "failed";
+          } else if (apiStep.reasoning) {
+            // If there's reasoning, the step has been executed
+            // Check if it's a success or failure based on reasoning or other indicators
+            stepStatus = apiStep.reasoning.toLowerCase().includes("failed") || 
+                        apiStep.reasoning.toLowerCase().includes("error") ? "failed" : "passed";
+          }
+          
+          return {
+            id: apiStep.id,
+            action: apiStep.action || `Step ${apiStep.id}`,
+            status: stepStatus,
+            reasoning: apiStep.reasoning,
+            screenshot: apiStep.screenshot,
+            beforeScreenshot: apiStep.before_screenshot,
+            afterScreenshot: apiStep.after_screenshot,
+            consoleLogs: apiStep.console_logs || [],
+            networkLogs: apiStep.network_logs || [],
+          };
+        });
+        
+        mappedScenarios.push({
+          id: apiScenario.id.toString(),
+          name: apiScenario.name,
+          status: (apiScenario.status as "pending" | "running" | "passed" | "failed") || "running",
+          hasRun: true,
+          steps,
+        });
+      });
+    } else if (testRun.sessions && testRun.sessions.length > 0) {
+      // Map from sessions if scenarios not directly available
+      testRun.sessions.forEach((session, index) => {
+        const scenarioId = session.scenario_id?.toString() || `session-${index}`;
+        const scenarioName = session.scenario?.name || `Scenario ${index + 1}`;
+        const scenarioStatus = session.scenario?.status || testRun.status === "completed" ? "passed" : "running";
+        
+        const steps: Step[] = (session.steps || session.scenario?.steps || []).map((apiStep) => {
+          // Determine step status
+          let stepStatus: "pending" | "running" | "passed" | "failed" = "pending";
+          if (apiStep.status) {
+            stepStatus = apiStep.status as "pending" | "running" | "passed" | "failed";
+          } else if (apiStep.reasoning) {
+            stepStatus = apiStep.reasoning.toLowerCase().includes("failed") || 
+                        apiStep.reasoning.toLowerCase().includes("error") ? "failed" : "passed";
+          }
+          
+          return {
+            id: apiStep.id,
+            action: apiStep.action || `Step ${apiStep.id}`,
+            status: stepStatus,
+            reasoning: apiStep.reasoning,
+            screenshot: apiStep.screenshot,
+            beforeScreenshot: apiStep.before_screenshot,
+            afterScreenshot: apiStep.after_screenshot,
+            consoleLogs: apiStep.console_logs || session.console_logs || [],
+            networkLogs: apiStep.network_logs || session.network_logs || [],
+          };
+        });
+        
+        mappedScenarios.push({
+          id: scenarioId,
+          name: scenarioName,
+          status: (scenarioStatus as "pending" | "running" | "passed" | "failed") || "running",
+          hasRun: true,
+          steps,
+        });
+      });
+    } else {
+      // If no scenarios or sessions, create placeholder scenarios based on existing ones
+      // This maintains the UI structure while waiting for data
+      return scenarios.map(s => ({
+        ...s,
+        status: s.status === "pending" ? "running" : s.status,
+      }));
+    }
+    
+    return mappedScenarios;
+  };
+
+  // Poll test run status
+  const pollTestRun = async (testRunId: number) => {
+    try {
+      const testRun = await getTestRun(testRunId);
+      const mappedScenarios = mapTestRunToScenarios(testRun);
+      
+      // Update scenarios state - merge with existing scenarios to preserve structure
+      setScenarios(prevScenarios => {
+        // If we have mapped scenarios, use them
+        if (mappedScenarios.length > 0) {
+          // Merge: update existing scenarios if they match, otherwise add new ones
+          const merged = [...prevScenarios];
+          mappedScenarios.forEach(mapped => {
+            const existingIndex = merged.findIndex(s => s.id === mapped.id);
+            if (existingIndex >= 0) {
+              // Preserve the original scenario name if it exists
+              const existingScenario = merged[existingIndex];
+              merged[existingIndex] = {
+                ...mapped,
+                name: existingScenario.name || mapped.name, // Preserve original name
+              };
+            } else {
+              merged.push(mapped);
+            }
+          });
+          return merged;
+        }
+        // Otherwise, update status of existing scenarios
+        return prevScenarios.map(s => ({
+          ...s,
+          status: s.status === "pending" ? "running" : s.status,
+        }));
+      });
+      
+      // Check if test run is complete
+      if (testRun.status === "completed" || testRun.status === "failed") {
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          setPollingInterval(null);
+        }
+        setIsRunningAll(false);
+        
+        const passedCount = testRun.passed_scenarios || 0;
+        const failedCount = testRun.failed_scenarios || 0;
+        const totalCount = testRun.total_scenarios || mappedScenarios.length;
+        
+        setLastRunStats({ passed: passedCount, failed: failedCount, total: totalCount });
+        setShowCompletionBanner(true);
+        setCurrentTestRunId(null);
+        
+        // Final update to mark all scenarios with final status
+        setScenarios(prevScenarios => 
+          prevScenarios.map(s => {
+            const mapped = mappedScenarios.find(m => m.id === s.id);
+            if (mapped) {
+              // Preserve original name
+              return { ...mapped, name: s.name || mapped.name };
+            }
+            return s;
+          })
+        );
+      }
+    } catch (error) {
+      console.error("Error polling test run:", error);
+      
+      // If we get a 404 or the test run doesn't exist, stop polling
+      if (error instanceof Error && error.message.includes("404")) {
+        if (pollingInterval) {
+          clearInterval(pollingInterval);
+          setPollingInterval(null);
+        }
+        setIsRunningAll(false);
+        setCurrentTestRunId(null);
+        toast({
+          title: "Error",
+          description: "Test run not found",
+          variant: "destructive",
+        });
+      }
+      // For other errors, continue polling but log them
+      // The polling will continue and might recover
+    }
+  };
+
   const handleRunAll = async () => {
+    if (!selectedProject || !suiteId) {
+      toast({
+        title: "Error",
+        description: "Project or suite ID is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsRunningAll(true);
     setShowCompletionBanner(false);
     
-    let passedCount = 0;
-    let failedCount = 0;
-    
-    for (let i = 0; i < scenarios.length; i++) {
-      const scenario = scenarios[i];
-      setRunAllProgress({ current: i + 1, total: scenarios.length });
-      await executeScenario(scenario.id, scenario.name);
-      
-      const updatedScenario = scenarios.find(s => s.id === scenario.id);
-      if (updatedScenario?.status === "passed") {
-        passedCount++;
-      } else if (updatedScenario?.status === "failed") {
-        failedCount++;
+    try {
+      const suiteIdNum = parseInt(suiteId, 10);
+      if (isNaN(suiteIdNum)) {
+        throw new Error("Invalid suite ID");
       }
+
+      // Call trigger API
+      const triggerResponse = await triggerCloudRun({
+        project_id: selectedProject.id,
+        suite_id: suiteIdNum,
+        options: {
+          max_steps: 8,
+        },
+      });
+
+      const testRunId = triggerResponse.test_run_id;
+      setCurrentTestRunId(testRunId);
+
+      // Initial poll
+      await pollTestRun(testRunId);
+
+      // Set up polling interval (poll every 2 seconds)
+      const interval = setInterval(() => {
+        pollTestRun(testRunId);
+      }, 2000);
       
-      await new Promise(resolve => setTimeout(resolve, 500));
+      setPollingInterval(interval);
+      
+      // Also update scenarios to show running state immediately
+      setScenarios(prevScenarios => 
+        prevScenarios.map(s => ({
+          ...s,
+          status: "running" as const,
+          hasRun: true,
+        }))
+      );
+
+      toast({
+        title: "Test run started",
+        description: `Test run ${testRunId} has been queued and is running`,
+      });
+    } catch (error) {
+      console.error("Error triggering test run:", error);
+      
+      // Clean up on error
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        setPollingInterval(null);
+      }
+      setCurrentTestRunId(null);
+      
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to trigger test run",
+        variant: "destructive",
+      });
+      setIsRunningAll(false);
+      
+      // Reset scenarios to pending state
+      setScenarios(prevScenarios => 
+        prevScenarios.map(s => ({
+          ...s,
+          status: s.hasRun ? s.status : "pending" as const,
+        }))
+      );
     }
-    
-    setRunAllProgress(null);
-    setLastRunStats({ passed: passedCount, failed: failedCount, total: scenarios.length });
-    setShowCompletionBanner(true);
-    setIsRunningAll(false);
   };
 
   const handleShare = () => {
@@ -411,10 +670,7 @@ export const TestSuiteRunsPage: React.FC = () => {
       {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-orange-500 rounded flex items-center justify-center">
-            <span className="text-white font-bold text-sm">Kplr</span>
-          </div>
-          <span className="text-sm font-medium text-gray-700">Your AI QA</span>
+          <img src={logoImage} alt="Kplr" className="w-8 h-8 rounded" />
         </div>
       </div>
 
@@ -522,7 +778,12 @@ export const TestSuiteRunsPage: React.FC = () => {
                     >
                       <AccordionTrigger 
                         className="px-4 hover:no-underline"
-                        onClick={() => setSelectedScenario(scenario.id)}
+                        onClick={() => {
+                          setSelectedScenario(scenario.id);
+                          // Reset screenshot carousel when selecting a scenario
+                          setCurrentScreenshotIndex(0);
+                          setSelectedStepIndex(0);
+                        }}
                       >
                         <div className="flex items-center gap-3 flex-1 text-left">
                           {getStatusIcon(scenario.status)}
@@ -595,7 +856,19 @@ export const TestSuiteRunsPage: React.FC = () => {
                                       ? 'bg-primary/10 border-2 border-primary shadow-md' 
                                       : 'bg-muted/30 hover:bg-muted/50'
                                   )}
-                                  onClick={() => !isCurrentlyExecuting && setSelectedStepIndex(index)}
+                                  onClick={() => {
+                                    if (!isCurrentlyExecuting) {
+                                      setSelectedStepIndex(index);
+                                      // Reset screenshot carousel when selecting a new step
+                                      const stepsWithScreenshots = scenario.steps.filter(
+                                        s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
+                                      );
+                                      const newIndex = stepsWithScreenshots.findIndex(s => s.id === step.id);
+                                      if (newIndex >= 0) {
+                                        setCurrentScreenshotIndex(newIndex);
+                                      }
+                                    }
+                                  }}
                                 >
                                   <div className="flex-shrink-0 mt-0.5">
                                     {isCurrentlyExecuting ? (
@@ -671,27 +944,69 @@ export const TestSuiteRunsPage: React.FC = () => {
                         <CardTitle className="text-base">Screenshots</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        {selectedScenarioData.steps.filter(s => s.status !== "pending").length === 0 ? (
-                          <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                            No screenshots available yet
-                          </div>
-                        ) : (
-                          <div className="space-y-4">
-                            {selectedScenarioData.steps
-                              .filter(s => s.status !== "pending")
-                              .map((step, index) => (
-                                <div key={step.id} className="space-y-3">
-                                  <div className="text-sm font-medium">
-                                    Step {index + 1}: {step.action}
+                        {(() => {
+                          const stepsWithScreenshots = selectedScenarioData.steps.filter(
+                            s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
+                          );
+                          
+                          if (stepsWithScreenshots.length === 0) {
+                            return (
+                              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                                No screenshots available yet
+                              </div>
+                            );
+                          }
+                          
+                          const currentStep = stepsWithScreenshots[currentScreenshotIndex];
+                          const stepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
+                          
+                          return (
+                            <div className="space-y-4">
+                              {/* Step Info */}
+                              <div className="flex items-center justify-between">
+                                <div className="text-sm font-medium">
+                                  Step {stepIndex + 1} of {stepsWithScreenshots.length}: {currentStep.action}
+                                </div>
+                                {stepsWithScreenshots.length > 1 && (
+                                  <div className="flex items-center gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setCurrentScreenshotIndex(prev => 
+                                        prev > 0 ? prev - 1 : stepsWithScreenshots.length - 1
+                                      )}
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <ChevronLeft className="h-4 w-4" />
+                                    </Button>
+                                    <span className="text-xs text-muted-foreground">
+                                      {currentScreenshotIndex + 1} / {stepsWithScreenshots.length}
+                                    </span>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setCurrentScreenshotIndex(prev => 
+                                        prev < stepsWithScreenshots.length - 1 ? prev + 1 : 0
+                                      )}
+                                      className="h-8 w-8 p-0"
+                                    >
+                                      <ChevronRight className="h-4 w-4" />
+                                    </Button>
                                   </div>
+                                )}
+                              </div>
+                              
+                              {/* Screenshot Display */}
+                              <div className="space-y-3">
+                                {currentStep.beforeScreenshot && currentStep.afterScreenshot ? (
                                   <div className="grid grid-cols-2 gap-3">
                                     <div>
                                       <p className="text-xs text-muted-foreground mb-2">Before</p>
                                       <div className="border rounded-lg overflow-hidden bg-muted/30">
                                         <img 
-                                          src={step.beforeScreenshot || "/placeholder.svg"} 
+                                          src={currentStep.beforeScreenshot} 
                                           alt="Before screenshot"
-                                          className="w-full h-48 object-cover"
+                                          className="w-full h-48 object-contain bg-white"
                                         />
                                       </div>
                                     </div>
@@ -699,17 +1014,48 @@ export const TestSuiteRunsPage: React.FC = () => {
                                       <p className="text-xs text-muted-foreground mb-2">After</p>
                                       <div className="border rounded-lg overflow-hidden bg-muted/30">
                                         <img 
-                                          src={step.afterScreenshot || "/placeholder.svg"} 
+                                          src={currentStep.afterScreenshot} 
                                           alt="After screenshot"
-                                          className="w-full h-48 object-cover"
+                                          className="w-full h-48 object-contain bg-white"
                                         />
                                       </div>
                                     </div>
                                   </div>
+                                ) : currentStep.screenshot ? (
+                                  <div className="border rounded-lg overflow-hidden bg-muted/30">
+                                    <img 
+                                      src={currentStep.screenshot} 
+                                      alt="Screenshot"
+                                      className="w-full h-96 object-contain bg-white"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="h-[300px] flex items-center justify-center text-muted-foreground border rounded-lg">
+                                    No screenshot available for this step
+                                  </div>
+                                )}
+                              </div>
+                              
+                              {/* Step Indicators */}
+                              {stepsWithScreenshots.length > 1 && (
+                                <div className="flex items-center justify-center gap-2">
+                                  {stepsWithScreenshots.map((_, index) => (
+                                    <button
+                                      key={index}
+                                      onClick={() => setCurrentScreenshotIndex(index)}
+                                      className={cn(
+                                        "h-2 rounded-full transition-all",
+                                        index === currentScreenshotIndex
+                                          ? "w-8 bg-primary"
+                                          : "w-2 bg-muted-foreground/30"
+                                      )}
+                                    />
+                                  ))}
                                 </div>
-                              ))}
-                          </div>
-                        )}
+                              )}
+                            </div>
+                          );
+                        })()}
                       </CardContent>
                     </Card>
 
@@ -750,25 +1096,30 @@ export const TestSuiteRunsPage: React.FC = () => {
                               <div className="bg-muted/30 rounded-lg p-4 min-h-[200px] max-h-[400px] overflow-y-auto font-mono text-xs">
                                 {(() => {
                                   const stepsToShow = showAllLogs 
-                                    ? selectedScenarioData.steps.filter(s => s.consoleLogs && s.consoleLogs.length > 0)
-                                    : selectedScenarioData.steps.filter((s, idx) => idx === selectedStepIndex && s.consoleLogs && s.consoleLogs.length > 0);
+                                    ? selectedScenarioData.steps.filter(s => s.consoleLogs && Array.isArray(s.consoleLogs) && s.consoleLogs.length > 0)
+                                    : selectedScenarioData.steps.filter((s, idx) => idx === selectedStepIndex && s.consoleLogs && Array.isArray(s.consoleLogs) && s.consoleLogs.length > 0);
                                   
                                   if (stepsToShow.length === 0) {
                                     return <p className="text-muted-foreground">No console logs available</p>;
                                   }
                                   
                                   return stepsToShow.map((step, index) => {
-                                    const actualIndex = selectedScenarioData.steps.indexOf(step);
+                                    const actualIndex = selectedScenarioData.steps.findIndex(s => s.id === step.id);
+                                    const logs = Array.isArray(step.consoleLogs) ? step.consoleLogs : [];
                                     return (
-                                      <div key={index} className="mb-3 pb-3 border-b border-border last:border-0">
+                                      <div key={step.id} className="mb-3 pb-3 border-b border-border last:border-0">
                                         <p className="text-xs font-semibold mb-2 text-foreground">
                                           Step {actualIndex + 1}: {step.action}
                                         </p>
-                                        {step.consoleLogs?.map((log, i) => (
-                                          <p key={i} className="text-xs text-muted-foreground leading-relaxed">
-                                            {log}
-                                          </p>
-                                        ))}
+                                        {logs.length > 0 ? (
+                                          logs.map((log, i) => (
+                                            <p key={i} className="text-xs text-muted-foreground leading-relaxed">
+                                              {typeof log === 'string' ? log : JSON.stringify(log)}
+                                            </p>
+                                          ))
+                                        ) : (
+                                          <p className="text-xs text-muted-foreground italic">No console logs for this step</p>
+                                        )}
                                       </div>
                                     );
                                   });
@@ -779,25 +1130,30 @@ export const TestSuiteRunsPage: React.FC = () => {
                               <div className="bg-muted/30 rounded-lg p-4 min-h-[200px] max-h-[400px] overflow-y-auto font-mono text-xs">
                                 {(() => {
                                   const stepsToShow = showAllLogs 
-                                    ? selectedScenarioData.steps.filter(s => s.networkLogs && s.networkLogs.length > 0)
-                                    : selectedScenarioData.steps.filter((s, idx) => idx === selectedStepIndex && s.networkLogs && s.networkLogs.length > 0);
+                                    ? selectedScenarioData.steps.filter(s => s.networkLogs && Array.isArray(s.networkLogs) && s.networkLogs.length > 0)
+                                    : selectedScenarioData.steps.filter((s, idx) => idx === selectedStepIndex && s.networkLogs && Array.isArray(s.networkLogs) && s.networkLogs.length > 0);
                                   
                                   if (stepsToShow.length === 0) {
                                     return <p className="text-muted-foreground">No network activity recorded</p>;
                                   }
                                   
                                   return stepsToShow.map((step, index) => {
-                                    const actualIndex = selectedScenarioData.steps.indexOf(step);
+                                    const actualIndex = selectedScenarioData.steps.findIndex(s => s.id === step.id);
+                                    const logs = Array.isArray(step.networkLogs) ? step.networkLogs : [];
                                     return (
-                                      <div key={index} className="mb-3 pb-3 border-b border-border last:border-0">
+                                      <div key={step.id} className="mb-3 pb-3 border-b border-border last:border-0">
                                         <p className="text-xs font-semibold mb-2 text-foreground">
                                           Step {actualIndex + 1}: {step.action}
                                         </p>
-                                        {step.networkLogs?.map((log, i) => (
-                                          <p key={i} className="text-xs text-muted-foreground leading-relaxed">
-                                            {log}
-                                          </p>
-                                        ))}
+                                        {logs.length > 0 ? (
+                                          logs.map((log, i) => (
+                                            <p key={i} className="text-xs text-muted-foreground leading-relaxed">
+                                              {typeof log === 'string' ? log : JSON.stringify(log)}
+                                            </p>
+                                          ))
+                                        ) : (
+                                          <p className="text-xs text-muted-foreground italic">No network logs for this step</p>
+                                        )}
                                       </div>
                                     );
                                   });

@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
-import { CheckCircle, XCircle, Loader2, Filter } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Filter, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
+import { useProject } from "../../contexts/ProjectContext";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../../hooks/use-toast";
 import {
@@ -40,6 +41,7 @@ interface TestRun {
 
 export const TestRunsPage: React.FC = () => {
   const { user } = useAuth();
+  const { selectedProject } = useProject();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [testRuns, setTestRuns] = useState<TestRun[]>([]);
@@ -50,25 +52,43 @@ export const TestRunsPage: React.FC = () => {
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const runsPerPage = 20;
 
   useEffect(() => {
-    if (user) {
+    if (user && selectedProject) {
       fetchSuites();
+    } else if (user && !selectedProject) {
+      setIsLoading(false);
     } else {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, selectedProject]);
 
   useEffect(() => {
-    if (user && suitesLoaded) {
+    if (user && selectedProject && suitesLoaded) {
+      setCurrentPage(1); // Reset to first page when filters change
       fetchTestRuns();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, suitesLoaded, selectedSuite, selectedStatus, startDate, endDate]);
+  }, [user, selectedProject, suitesLoaded, selectedSuite, selectedStatus, startDate, endDate]);
+
+  useEffect(() => {
+    if (user && selectedProject && suitesLoaded) {
+      fetchTestRuns();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
 
   const fetchSuites = async () => {
+    if (!selectedProject) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const suitesData = await getTestSuites();
+      const suitesData = await getTestSuites(selectedProject.id);
       setSuites(suitesData);
       setSuitesLoaded(true);
       // If no suites, stop loading
@@ -91,36 +111,60 @@ export const TestRunsPage: React.FC = () => {
     try {
       setIsLoading(true);
       
-      // If a specific suite is selected, get runs for that suite
-      // Otherwise, get runs for all suites
+      // Calculate offset for pagination
+      const offset = (currentPage - 1) * runsPerPage;
+      
+      // If a specific suite is selected, get runs for that suite with server-side pagination
+      // Otherwise, get runs for all suites (with limit per suite, then paginate client-side)
       let allRuns: TestRunResponse[] = [];
       
       if (selectedSuite !== "all") {
         const suiteId = parseInt(selectedSuite, 10);
         if (isNaN(suiteId)) {
           setTestRuns([]);
+          setTotalCount(0);
           setIsLoading(false);
           return;
         }
-        const runs = await getTestRunsForSuite(suiteId).catch(err => {
-          console.error("Error fetching test runs for suite:", err);
-          toast({
-            title: "Error",
-            description: err instanceof Error ? err.message : "Failed to load test runs",
-            variant: "destructive",
+        // For single suite, use server-side pagination with limit=20 and offset
+        // When filters are active, fetch a larger batch to ensure we have data after filtering
+        const hasFilters = selectedStatus !== "all" || startDate || endDate;
+        if (hasFilters) {
+          // Fetch a larger batch when filters are active, then filter and paginate client-side
+          const runs = await getTestRunsForSuite(suiteId, 500, 0).catch(err => {
+            console.error("Error fetching test runs for suite:", err);
+            toast({
+              title: "Error",
+              description: err instanceof Error ? err.message : "Failed to load test runs",
+              variant: "destructive",
+            });
+            return [];
           });
-          return [];
-        });
-        allRuns = runs;
+          allRuns = runs;
+        } else {
+          // No filters: use server-side pagination with limit=20 and offset
+          const runs = await getTestRunsForSuite(suiteId, runsPerPage, offset).catch(err => {
+            console.error("Error fetching test runs for suite:", err);
+            toast({
+              title: "Error",
+              description: err instanceof Error ? err.message : "Failed to load test runs",
+              variant: "destructive",
+            });
+            return [];
+          });
+          allRuns = runs;
+        }
       } else {
-        // Get runs for all suites
+        // Get runs for all suites with limit per suite
         if (suites.length === 0) {
           setTestRuns([]);
+          setTotalCount(0);
           setIsLoading(false);
           return;
         }
+        // Fetch runsPerPage runs from each suite to get a good sample
         const runsPromises = suites.map(suite => 
-          getTestRunsForSuite(suite.id).catch(err => {
+          getTestRunsForSuite(suite.id, runsPerPage, 0).catch(err => {
             console.error(`Error fetching test runs for suite ${suite.id}:`, err);
             // Don't show toast for each individual error, just log it
             return [];
@@ -175,7 +219,18 @@ export const TestRunsPage: React.FC = () => {
         new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
       );
       
-      setTestRuns(filteredRuns);
+      // Set total count before pagination
+      setTotalCount(filteredRuns.length);
+      
+      // Apply client-side pagination only if filters are active or "all suites" is selected
+      // Otherwise, server-side pagination is already applied
+      const hasFilters = selectedStatus !== "all" || startDate || endDate;
+      const needsClientPagination = selectedSuite === "all" || hasFilters;
+      const paginatedRuns = needsClientPagination 
+        ? filteredRuns.slice(offset, offset + runsPerPage)
+        : filteredRuns;
+      
+      setTestRuns(paginatedRuns);
     } catch (error) {
       console.error("Error fetching test runs:", error);
       toast({
@@ -218,6 +273,15 @@ export const TestRunsPage: React.FC = () => {
     setSelectedStatus("all");
     setStartDate("");
     setEndDate("");
+    setCurrentPage(1);
+  };
+
+  const totalPages = Math.ceil(totalCount / runsPerPage);
+
+  const goToPage = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    }
   };
 
   if (isLoading) {
@@ -307,7 +371,7 @@ export const TestRunsPage: React.FC = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Test Run History ({testRuns.length} runs)</CardTitle>
+            <CardTitle>Test Run History ({totalCount} runs)</CardTitle>
           </CardHeader>
           <CardContent>
             {testRuns.length === 0 ? (
@@ -315,70 +379,125 @@ export const TestRunsPage: React.FC = () => {
                 No test runs found
               </div>
             ) : (
-              <div className="space-y-4">
-                {testRuns.map((run) => (
-                  <div
-                    key={run.id}
-                    className={cn(
-                      "border border-border rounded-lg p-4 hover:bg-accent/50 cursor-pointer transition-colors",
-                      run.status === "running" && "bg-orange-50 border-orange-200"
-                    )}
-                    onClick={() => navigate(`/suite/${run.suite_id}/runs`)}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-3">
-                          <h3 className="font-semibold text-lg">
-                            {run.test_suites?.name || "Unknown Suite"}
-                          </h3>
-                          {getStatusBadge(run.status)}
-                        </div>
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div>
-                            <span className="text-muted-foreground">Started:</span>
-                            <p className="font-medium">
-                              {new Date(run.started_at).toLocaleString()}
-                            </p>
+              <>
+                <div className="space-y-4">
+                  {testRuns.map((run) => (
+                    <div
+                      key={run.id}
+                      className={cn(
+                        "border border-border rounded-lg p-4 hover:bg-accent/50 cursor-pointer transition-colors",
+                        run.status === "running" && "bg-orange-50 border-orange-200"
+                      )}
+                      onClick={() => navigate(`/suite/${run.suite_id}/runs`)}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-3">
+                            <h3 className="font-semibold text-lg">
+                              {run.test_suites?.name || "Unknown Suite"}
+                            </h3>
+                            {getStatusBadge(run.status)}
                           </div>
                           
-                          <div>
-                            <span className="text-muted-foreground">Duration:</span>
-                            <p className="font-medium">
-                              {calculateDuration(run.started_at, run.completed_at)}
-                            </p>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <span className="text-muted-foreground">Started:</span>
+                              <p className="font-medium">
+                                {new Date(run.started_at).toLocaleString()}
+                              </p>
+                            </div>
+                            
+                            <div>
+                              <span className="text-muted-foreground">Duration:</span>
+                              <p className="font-medium">
+                                {calculateDuration(run.started_at, run.completed_at)}
+                              </p>
+                            </div>
+                            
+                            <div>
+                              <span className="text-muted-foreground">Scenarios:</span>
+                              <p className="font-medium">
+                                {run.total_scenarios} total
+                              </p>
+                            </div>
+                            
+                            <div>
+                              <span className="text-muted-foreground">Success Rate:</span>
+                              <p className="font-medium">
+                                {getSuccessRate(run.passed_scenarios, run.total_scenarios)}
+                              </p>
+                            </div>
                           </div>
-                          
-                          <div>
-                            <span className="text-muted-foreground">Scenarios:</span>
-                            <p className="font-medium">
-                              {run.total_scenarios} total
-                            </p>
-                          </div>
-                          
-                          <div>
-                            <span className="text-muted-foreground">Success Rate:</span>
-                            <p className="font-medium">
-                              {getSuccessRate(run.passed_scenarios, run.total_scenarios)}
-                            </p>
-                          </div>
-                        </div>
 
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="flex items-center gap-1 text-green-600">
-                            <CheckCircle className="h-4 w-4" />
-                            <span className="font-semibold">{run.passed_scenarios}</span> passed
-                          </span>
-                          <span className="flex items-center gap-1 text-red-600">
-                            <XCircle className="h-4 w-4" />
-                            <span className="font-semibold">{run.failed_scenarios}</span> failed
-                          </span>
+                          <div className="flex items-center gap-4 text-sm">
+                            <span className="flex items-center gap-1 text-green-600">
+                              <CheckCircle className="h-4 w-4" />
+                              <span className="font-semibold">{run.passed_scenarios}</span> passed
+                            </span>
+                            <span className="flex items-center gap-1 text-red-600">
+                              <XCircle className="h-4 w-4" />
+                              <span className="font-semibold">{run.failed_scenarios}</span> failed
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
+                  ))}
+                </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                    <div className="text-sm text-muted-foreground">
+                      Showing {(currentPage - 1) * runsPerPage + 1} to {Math.min(currentPage * runsPerPage, totalCount)} of {totalCount} runs
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                          let pageNum: number;
+                          if (totalPages <= 5) {
+                            pageNum = i + 1;
+                          } else if (currentPage <= 3) {
+                            pageNum = i + 1;
+                          } else if (currentPage >= totalPages - 2) {
+                            pageNum = totalPages - 4 + i;
+                          } else {
+                            pageNum = currentPage - 2 + i;
+                          }
+                          return (
+                            <Button
+                              key={pageNum}
+                              variant={currentPage === pageNum ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => goToPage(pageNum)}
+                              className="w-10"
+                            >
+                              {pageNum}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => goToPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

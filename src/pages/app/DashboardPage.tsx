@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import logoImage from "../../assets/logo-D_k9ADKT.png";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { 
@@ -22,6 +23,7 @@ import {
   TestSuiteResponse
 } from "../../lib/api-client";
 import { useAuth } from "../../contexts/AuthContext";
+import { useProject } from "../../contexts/ProjectContext";
 import { useToast } from "../../hooks/use-toast";
 
 interface DashboardStats {
@@ -61,6 +63,7 @@ interface TrendData {
 export const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { selectedProject } = useProject();
   const { toast } = useToast();
   const [stats, setStats] = useState<DashboardStats>({
     totalRuns: 0,
@@ -78,22 +81,32 @@ export const DashboardPage: React.FC = () => {
   const [trendData, setTrendData] = useState<TrendData[]>([]);
 
   useEffect(() => {
-    if (user) {
+    if (user && selectedProject) {
       loadDashboardData();
+    } else if (user && !selectedProject) {
+      // User is authenticated but no project selected yet
+      setIsLoading(false);
     } else {
       // If no user, stop loading
       setIsLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, selectedProject]);
 
   const loadDashboardData = async () => {
+    if (!selectedProject) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       setIsLoading(true);
       
-      // Load all data in parallel
+      const projectId = selectedProject.id;
+      
+      // Load all data in parallel with project_id
       const [statsData, recentRunsData, schedulesData, suitesData] = await Promise.all([
-        getDashboardStatistics().catch(err => {
+        getDashboardStatistics({ project_id: projectId }).catch(err => {
           console.error("Error fetching dashboard statistics:", err);
           toast({
             title: "Error",
@@ -107,7 +120,7 @@ export const DashboardPage: React.FC = () => {
             success_rate: 0,
           };
         }),
-        getRecentTestRuns({ limit: 10 }).catch(err => {
+        getRecentTestRuns({ project_id: projectId, limit: 5 }).catch(err => {
           console.error("Error fetching recent test runs:", err);
           toast({
             title: "Error",
@@ -116,7 +129,7 @@ export const DashboardPage: React.FC = () => {
           });
           return [];
         }),
-        getSchedules({ is_active: true }).catch(err => {
+        getSchedules({ project_id: projectId, is_active: true }).catch(err => {
           console.error("Error fetching schedules:", err);
           toast({
             title: "Error",
@@ -125,7 +138,7 @@ export const DashboardPage: React.FC = () => {
           });
           return [];
         }),
-        getTestSuites().catch(err => {
+        getTestSuites(projectId).catch(err => {
           console.error("Error fetching test suites:", err);
           toast({
             title: "Error",
@@ -281,15 +294,23 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
+  if (!selectedProject) {
+    return (
+      <div className="flex-1 overflow-y-auto bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-lg font-medium text-muted-foreground mb-2">No project selected</p>
+          <p className="text-sm text-muted-foreground">Please select a project from the sidebar to view dashboard data.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-y-auto bg-gray-50">
       {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-orange-500 rounded flex items-center justify-center">
-            <span className="text-white font-bold text-sm">Kplr</span>
-          </div>
-          <span className="text-sm font-medium text-gray-700">Your AI QA</span>
+          <img src={logoImage} alt="Kplr" className="w-8 h-8 rounded" />
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" className="w-[280px] justify-start text-left font-normal">
