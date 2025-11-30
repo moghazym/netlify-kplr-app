@@ -18,7 +18,6 @@ import {
   Bug,
   RotateCcw,
   ExternalLink,
-  Terminal,
   Copy,
   Check,
   ChevronLeft,
@@ -83,8 +82,6 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [isRunningAll, setIsRunningAll] = useState(false);
   const [showCompletionBanner, setShowCompletionBanner] = useState(false);
   const [lastRunStats, setLastRunStats] = useState<{ passed: number; failed: number; total: number } | null>(null);
-  const [_isPlaywrightInstalled, setIsPlaywrightInstalled] = useState(false);
-  const [showPlaywrightDialog, setShowPlaywrightDialog] = useState(false);
 
   const [suiteInfo, setSuiteInfo] = useState<{ name: string; description?: string } | null>(null);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -938,14 +935,6 @@ export const TestSuiteRunsPage: React.FC = () => {
                 <h2 className="text-2xl font-semibold">{suiteInfo.name}</h2>
               </div>
               <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowPlaywrightDialog(true)}
-                >
-                  <Terminal className="h-4 w-4 mr-2" />
-                  Check Playwright
-                </Button>
                 <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)}>
                   <Share2 className="h-4 w-4 mr-2" />
                   Share
@@ -1591,38 +1580,6 @@ export const TestSuiteRunsPage: React.FC = () => {
                 <DialogFooter className="sm:justify-start">
                   <Button variant="secondary" onClick={() => setIsShareDialogOpen(false)}>
                     Close
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            {/* Playwright Dialog */}
-            <Dialog open={showPlaywrightDialog} onOpenChange={setShowPlaywrightDialog}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Playwright Installation</DialogTitle>
-                  <DialogDescription>
-                    Playwright is required to run test scenarios. Install it to get started.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="bg-muted/50 rounded-lg p-4">
-                    <p className="text-sm font-mono mb-2">npm install -g playwright</p>
-                    <p className="text-sm font-mono">npx playwright install</p>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setShowPlaywrightDialog(false)}>
-                    Close
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setIsPlaywrightInstalled(true);
-                      setShowPlaywrightDialog(false);
-                    }}
-                    className="bg-orange-500 hover:bg-orange-600 text-white"
-                  >
-                    Mark as Installed
                   </Button>
                 </DialogFooter>
               </DialogContent>
