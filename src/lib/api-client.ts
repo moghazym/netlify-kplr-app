@@ -36,6 +36,8 @@ import {
 } from './mock-api';
 
 // Get the API base URL from environment variable or use a default
+// In development, we use the Vite proxy, so we leave this empty to use relative URLs
+// In production, this should be set to https://api.usekplr.com
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
@@ -62,22 +64,37 @@ export const apiRequest = async <T = any>(
   }
 
   // Add Authorization header if we have a token
+  // For localhost, we rely on tokens stored in localStorage/sessionStorage from checkUrlForAuth()
+  // For production, we use cookies (which are automatically sent with credentials: 'include')
   if (typeof window !== 'undefined') {
     const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
     if (token && !headers['Authorization']) {
       headers['Authorization'] = `Bearer ${token}`;
+      if (import.meta.env.DEV) {
+        console.log('[API] Using token from storage for Authorization header');
+      }
+    } else if (import.meta.env.DEV && !token) {
+      console.warn('[API] No token found in storage for request to:', endpoint);
     }
   }
 
+  // In development, use the Vite proxy (relative URL)
+  // In production, use the full API URL
   const url = endpoint.startsWith('http')
     ? endpoint
-    : `${API_BASE_URL}${endpoint}`;
+    : API_BASE_URL
+    ? `${API_BASE_URL}${endpoint}`
+    : endpoint; // Use relative URL for Vite proxy in dev
 
   const response = await fetch(url, {
     ...options,
     headers,
     credentials: 'include',
   });
+
+  // For localhost, try to extract tokens from response headers if available
+  // Note: JavaScript can't read Set-Cookie headers, but the proxy might expose them differently
+  // We rely on checkUrlForAuth() to extract tokens from URL params and store them
 
   if (!response.ok) {
     let errorData: any;

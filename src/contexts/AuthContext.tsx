@@ -63,6 +63,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     let isMounted = true;
     const initAuth = async () => {
       try {
+        // Check if we have a token before making the API call
+        const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+        logAuth('Token in storage:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN');
+
         logAuth('Fetching /api/auth/me for session hydration');
         const me = await apiGet<User>('/api/auth/me');
         if (me && isMounted) {
@@ -72,6 +76,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       } catch (err) {
         logAuth('Failed to hydrate session - will redirect to auth', err);
+
+        // Check if we have cached user data
+        const cachedUser = getUserFromStorage();
+        if (cachedUser) {
+          logAuth('⚠️ API call failed but found cached user, clearing it:', cachedUser);
+        }
+
         if (isMounted) {
           setUser(null);
           clearUserFromStorage();

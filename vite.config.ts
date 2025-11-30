@@ -20,6 +20,8 @@ export default defineConfig({
         target: 'https://api.usekplr.com',
         changeOrigin: true,
         secure: true,
+        cookieDomainRewrite: 'localhost', // Rewrite cookie domain to localhost
+        cookiePathRewrite: '/', // Rewrite cookie path
         // Forward cookies and Authorization header for authentication
         configure: (proxy, _options) => {
           proxy.on('proxyReq', (proxyReq, req, _res) => {
@@ -30,6 +32,19 @@ export default defineConfig({
             // Forward Authorization header (Bearer token)
             if (req.headers.authorization) {
               proxyReq.setHeader('Authorization', req.headers.authorization);
+            }
+          });
+          
+          // Handle Set-Cookie headers from backend and rewrite domain
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            const setCookieHeaders = proxyRes.headers['set-cookie'];
+            if (setCookieHeaders) {
+              // Rewrite cookie domain to localhost so browser accepts them
+              proxyRes.headers['set-cookie'] = setCookieHeaders.map((cookie: string) => {
+                return cookie
+                  .replace(/Domain=[^;]+/gi, 'Domain=localhost')
+                  .replace(/SameSite=None/gi, 'SameSite=Lax'); // Lax works better for localhost
+              });
             }
           });
         },
