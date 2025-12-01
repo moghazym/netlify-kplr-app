@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,7 @@ export default function SecretsPage() {
   const [copiedSecret, setCopiedSecret] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [loadingReveal, setLoadingReveal] = useState<Set<number>>(new Set());
+  const isFetchingSecretsRef = useRef(false);
 
   useEffect(() => {
     if (user) {
@@ -37,7 +38,13 @@ export default function SecretsPage() {
   }, [user]);
 
   const fetchSecrets = async () => {
+    // Prevent duplicate calls
+    if (isFetchingSecretsRef.current) {
+      return;
+    }
+
     try {
+      isFetchingSecretsRef.current = true;
       const data = await getSecrets();
       setSecrets(data || []);
     } catch (error: any) {
@@ -48,6 +55,7 @@ export default function SecretsPage() {
       });
     } finally {
       setIsLoading(false);
+      isFetchingSecretsRef.current = false;
     }
   };
 

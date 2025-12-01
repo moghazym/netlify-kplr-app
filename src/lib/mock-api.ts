@@ -42,12 +42,11 @@ const mockProjects: ProjectResponse[] = [
 
 /**
  * Check if we should use mock API
- * In development mode, use mock API to bypass real services
+ * Set to false to always use production APIs
  */
 export const shouldUseMockApi = (): boolean => {
-  // Use mock API in development mode
-  // return import.meta.env.DEV;
-  return true;
+  // Always use production APIs - set to false
+  return false;
 };
 
 /**

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
 import { 
   CheckCircle, 
   XCircle, 
@@ -295,7 +296,7 @@ export const DashboardPage: React.FC = () => {
     return (
       <div className="flex-1 overflow-y-auto flex items-center justify-center">
         <div className="text-center">
-          <p className="text-lg font-medium text-muted-foreground mb-2">No project selected</p>
+          <p className="text-lg font-medium text-muted-foreground mb-2">No workspace selected</p>
           <p className="text-sm text-muted-foreground">Please select a project from the sidebar to view dashboard data.</p>
         </div>
       </div>
@@ -478,18 +479,18 @@ export const DashboardPage: React.FC = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <select
-                value={selectedSuite}
-                onChange={(e) => setSelectedSuite(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <option value="">Select a test suite</option>
-                {testSuites.map((suite) => (
-                  <option key={suite.id} value={suite.id.toString()}>
-                    {suite.name}
-                  </option>
-                ))}
-              </select>
+              <Select value={selectedSuite} onValueChange={setSelectedSuite}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a test suite" />
+                </SelectTrigger>
+                <SelectContent>
+                  {testSuites.map((suite) => (
+                    <SelectItem key={suite.id} value={suite.id.toString()}>
+                      {suite.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button onClick={handleQuickRun} className="w-full bg-orange-500 hover:bg-orange-600 text-white" disabled={!selectedSuite}>
                 <PlayCircle className="h-4 w-4 mr-2" />
                 Run Test Suite
@@ -553,7 +554,7 @@ export const DashboardPage: React.FC = () => {
                     <tr className="border-b text-sm text-muted-foreground">
                       <th className="text-left py-3 px-2 font-medium">Title</th>
                       <th className="text-center py-3 px-2 font-medium">Status</th>
-                      <th className="text-center py-3 px-2 font-medium">Issues</th>
+                      <th className="text-center py-3 px-2 font-medium">Total Scenarios</th>
                       <th className="text-right py-3 px-2 font-medium">Started</th>
                     </tr>
                   </thead>
@@ -569,10 +570,15 @@ export const DashboardPage: React.FC = () => {
                         </td>
                         <td className="py-4 px-2 text-center">
                           <div className="flex items-center justify-center gap-1">
-                            {run.status === "completed" ? (
+                            {run.status === "completed" || run.status === "passed" ? (
                               <>
                                 <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                                <span className="text-sm">Completed</span>
+                                <span className="text-sm text-green-600 font-medium">Completed</span>
+                              </>
+                            ) : run.status === "failed" ? (
+                              <>
+                                <div className="h-2 w-2 rounded-full bg-red-500"></div>
+                                <span className="text-sm text-red-600 font-medium capitalize">Failed</span>
                               </>
                             ) : (
                               <>
@@ -583,18 +589,15 @@ export const DashboardPage: React.FC = () => {
                           </div>
                         </td>
                         <td className="py-4 px-2">
-                          <div className="flex items-center justify-center gap-3 text-sm">
-                            <span className="text-muted-foreground">{run.total_scenarios}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="flex items-center gap-1">
-                                <span className="h-2 w-2 rounded-full bg-green-500"></span>
-                                <span className="text-green-600 font-medium">{run.passed_scenarios}</span>
+                          <div className="flex items-center justify-center text-sm">
+                            <span className="text-foreground font-medium">
+                              {run.total_scenarios} total
+                            </span>
+                            {run.total_scenarios > 0 && (
+                              <span className="text-muted-foreground mx-2">
+                                ({run.passed_scenarios} passed, {run.failed_scenarios} failed)
                               </span>
-                              <span className="flex items-center gap-1">
-                                <span className="h-2 w-2 rounded-full bg-red-500"></span>
-                                <span className="text-red-600 font-medium">{run.failed_scenarios}</span>
-                              </span>
-                            </div>
+                            )}
                           </div>
                         </td>
                         <td className="py-4 px-2 text-right text-sm text-muted-foreground">

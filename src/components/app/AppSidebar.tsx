@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Home, FileText, PlayCircle, Settings, ChevronDown, Key, LogOut, User, Calendar, Plus, Trash2, CreditCard, Smartphone } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -59,12 +59,21 @@ export function AppSidebar() {
   const [isCreating, setIsCreating] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const isCreatingWorkspaceRef = useRef(false);
 
   const handleCreateWorkspace = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newWorkspaceName.trim()) {
+      // Prevent duplicate submissions
+      if (isCreatingWorkspaceRef.current) {
+        return;
+      }
+
+      const workspaceName = newWorkspaceName.trim();
+      
       try {
+        isCreatingWorkspaceRef.current = true;
         const workspace = await createProject({
-          name: newWorkspaceName.trim(),
+          name: workspaceName,
         });
 
         toast({
@@ -73,8 +82,7 @@ export function AppSidebar() {
         });
 
         // Refresh projects list and select the new one
-        await refreshProjects();
-        setSelectedProject(workspace);
+        await refreshProjects(workspace);
         setNewWorkspaceName("");
         setIsCreating(false);
       } catch (error) {
@@ -84,6 +92,8 @@ export function AppSidebar() {
           description: error instanceof Error ? error.message : "Failed to create workspace",
           variant: "destructive"
         });
+      } finally {
+        isCreatingWorkspaceRef.current = false;
       }
     }
   };
@@ -132,7 +142,7 @@ export function AppSidebar() {
               {!collapsed && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-between h-auto py-2">
+                    <Button variant="ghost" className="w-full justify-between h-auto py-2 border border-primary/50 hover:border-primary transition-colors">
                       <span className="font-semibold text-sm truncate">
                         {selectedProject?.name || "Select Workspace"}
                       </span>
@@ -144,7 +154,7 @@ export function AppSidebar() {
                       <div key={workspace.id} className="relative group">
                         <DropdownMenuItem
                           onClick={() => setSelectedProject(workspace)}
-                          className="pr-8"
+                          className={projects.length > 1 ? "pr-8" : ""}
                         >
                           {workspace.name}
                         </DropdownMenuItem>
@@ -152,11 +162,12 @@ export function AppSidebar() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 h-6 w-6 p-0"
+                            className="absolute right-1 top-1/2 -translate-y-1/2 opacity-60 hover:opacity-100 h-6 w-6 p-0 transition-opacity"
                             onClick={(e) => {
                               e.stopPropagation();
                               setDeleteId(workspace.id);
                             }}
+                            title="Delete workspace"
                           >
                             <Trash2 className="h-3 w-3 text-destructive" />
                           </Button>
@@ -278,7 +289,7 @@ export function AppSidebar() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Workspace</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this workspace? This action cannot be undone and will delete all associated data.
+              Are you sure you want to delete the workspace "{projects.find(p => p.id === deleteId)?.name}"? This action cannot be undone and will delete all associated data including test suites, test runs, and schedules.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { getProjects, ProjectResponse } from '../lib/api-client';
 
@@ -7,7 +7,7 @@ interface ProjectContextType {
   selectedProject: ProjectResponse | null;
   setSelectedProject: (project: ProjectResponse | null) => void;
   loading: boolean;
-  refreshProjects: () => Promise<void>;
+  refreshProjects: (selectProject?: ProjectResponse | null) => Promise<void>;
 }
 
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined);
@@ -29,8 +29,15 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [selectedProject, setSelectedProject] = useState<ProjectResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const isFetchingProjectsRef = useRef(false);
+  const lastUserIdRef = useRef<string | null>(null);
 
-  const fetchProjects = async () => {
+  const fetchProjects = async (selectProject?: ProjectResponse | null) => {
+    // Prevent duplicate calls
+    if (isFetchingProjectsRef.current) {
+      return;
+    }
+
     if (!user) {
       setProjects([]);
       setSelectedProject(null);
@@ -39,12 +46,20 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     }
 
     try {
+      isFetchingProjectsRef.current = true;
       setLoading(true);
       const projectsData = await getProjects();
       setProjects(projectsData || []);
       
-      // Select first project by default if available
-      if (projectsData && projectsData.length > 0) {
+      // If a project is explicitly provided to select, use it
+      if (selectProject) {
+        const foundProject = projectsData.find(p => p.id === selectProject.id);
+        if (foundProject) {
+          setSelectedProject(foundProject);
+          localStorage.setItem('selected_project_id', foundProject.id.toString());
+        }
+      } else if (projectsData && projectsData.length > 0) {
+        // Select first project by default if available
         // Check if there's a previously selected project in localStorage
         const savedProjectId = localStorage.getItem('selected_project_id');
         const savedProject = savedProjectId 
@@ -64,11 +79,17 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
       setSelectedProject(null);
     } finally {
       setLoading(false);
+      isFetchingProjectsRef.current = false;
     }
   };
 
   useEffect(() => {
-    fetchProjects();
+    // Only fetch if user changed (not on every render)
+    const userId = user?.id || null;
+    if (userId !== lastUserIdRef.current) {
+      lastUserIdRef.current = userId;
+      fetchProjects();
+    }
   }, [user]);
 
   // Update localStorage when selected project changes

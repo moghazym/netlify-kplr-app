@@ -25,6 +25,7 @@ import {
   ChevronRight,
   Smartphone,
   Globe,
+  Trash2,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Textarea } from "../../components/ui/textarea";
@@ -38,6 +39,9 @@ import {
   getScenarios,
   triggerCloudRun,
   getTestRun,
+  getLatestTestRun,
+  createScenario,
+  deleteScenario,
   TestRunWithSessionsResponse
 } from "../../lib/api-client";
 import { useToast } from "../../hooks/use-toast";
@@ -74,13 +78,11 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deletingScenario, setDeletingScenario] = useState<{ id: string; name: string } | null>(null);
   const [newScenario, setNewScenario] = useState("");
   const [editingScenario, setEditingScenario] = useState<{ id: string; name: string } | null>(null);
-  const [isRunning, setIsRunning] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [executingStepIndex, setExecutingStepIndex] = useState<number | null>(null);
-  const [currentStepReasoning, setCurrentStepReasoning] = useState("");
-  const [executingScenarioId, setExecutingScenarioId] = useState<string | null>(null);
   const [expandedScenarioId, setExpandedScenarioId] = useState<string | undefined>("");
   const [showAllLogs, setShowAllLogs] = useState(false);
   const [isRunningAll, setIsRunningAll] = useState<{ web: boolean; ios: boolean; android: boolean }>({
@@ -162,10 +164,11 @@ export const TestSuiteRunsPage: React.FC = () => {
         return;
       }
 
-      // Load suite and scenarios in parallel
-      const [suiteData, scenariosData] = await Promise.all([
+      // Load suite, scenarios, and latest test run in parallel
+      const [suiteData, scenariosData, latestTestRunResponse] = await Promise.all([
         getTestSuite(suiteIdNum),
         getScenarios(suiteIdNum),
+        getLatestTestRun(suiteIdNum).catch(() => null), // Don't fail if no test run exists
       ]);
 
       setSuiteInfo({
@@ -173,16 +176,74 @@ export const TestSuiteRunsPage: React.FC = () => {
         description: suiteData.description || undefined,
       });
 
-      // Transform scenarios to local format
-      const transformedScenarios: Scenario[] = scenariosData.map(scenario => ({
-        id: scenario.id.toString(),
-        name: scenario.name,
-        status: "pending" as const,
-        hasRun: false,
-        steps: [],
-      }));
+      // If there's a latest test run, load its full details and map to scenarios
+      if (latestTestRunResponse) {
+        try {
+          const fullTestRun = await getTestRun(latestTestRunResponse.id);
+          
+          // Set platform if available in test run
+          if (fullTestRun.platform) {
+            const platformLower = fullTestRun.platform.toLowerCase();
+            if (platformLower === "web" || platformLower === "ios" || platformLower === "android") {
+              setSelectedPlatform(platformLower as "web" | "ios" | "android");
+            }
+          }
+          
+          const mappedScenarios = mapTestRunToScenarios(fullTestRun, false);
+          
+          // Merge with scenarios from API to preserve scenario names
+          const mergedScenarios = mappedScenarios.map(mapped => {
+            const apiScenario = scenariosData.find(s => s.id.toString() === mapped.id);
+            return {
+              ...mapped,
+              name: apiScenario?.name || mapped.name, // Use API scenario name if available
+            };
+          });
 
-      setScenarios(transformedScenarios);
+          // Add any scenarios that don't have test run data yet
+          const scenarioIdsWithRun = new Set(mappedScenarios.map(s => s.id));
+          const scenariosWithoutRun = scenariosData
+            .filter(s => !scenarioIdsWithRun.has(s.id.toString()))
+            .map(scenario => ({
+              id: scenario.id.toString(),
+              name: scenario.name,
+              status: "pending" as const,
+              hasRun: false,
+              steps: [],
+            }));
+
+          setScenarios([...mergedScenarios, ...scenariosWithoutRun]);
+
+          // Auto-select first scenario if available
+          if (mergedScenarios.length > 0) {
+            setSelectedScenario(mergedScenarios[0].id);
+            setExpandedScenarioId(`scenario-${mergedScenarios[0].id}`);
+            setCurrentScreenshotIndex(0);
+            setSelectedStepIndex(0);
+          }
+        } catch (error) {
+          console.error("Error loading latest test run details:", error);
+          // Fall back to showing scenarios without test run data
+          const transformedScenarios: Scenario[] = scenariosData.map(scenario => ({
+            id: scenario.id.toString(),
+            name: scenario.name,
+            status: "pending" as const,
+            hasRun: false,
+            steps: [],
+          }));
+          setScenarios(transformedScenarios);
+        }
+      } else {
+        // No test run exists, just show scenarios
+        const transformedScenarios: Scenario[] = scenariosData.map(scenario => ({
+          id: scenario.id.toString(),
+          name: scenario.name,
+          status: "pending" as const,
+          hasRun: false,
+          steps: [],
+        }));
+        setScenarios(transformedScenarios);
+      }
     } catch (error) {
       console.error("Error loading suite data:", error);
       toast({
@@ -195,170 +256,6 @@ export const TestSuiteRunsPage: React.FC = () => {
     }
   };
 
-  const generateStepsFromScenario = (scenarioName: string): Step[] => {
-    const name = scenarioName.toLowerCase();
-    const steps: Step[] = [];
-
-    if (name.includes("navigate") || name.includes("go to")) {
-      steps.push({ id: 1, action: "🌐 Navigate to target URL", status: "pending" });
-    }
-    if (name.includes("click")) {
-      steps.push({ id: 2, action: "👆 Locate and click target element", status: "pending" });
-    }
-    if (name.includes("search") || name.includes("type") || name.includes("write")) {
-      steps.push({ id: 3, action: "⌨️ Find input field and enter text", status: "pending" });
-    }
-    if (name.includes("verify") || name.includes("check") || name.includes("see")) {
-      steps.push({ id: 4, action: "👁️ Verify expected content is visible", status: "pending" });
-    }
-    if (name.includes("complete") || name.includes("purchase")) {
-      steps.push({ id: 5, action: "✅ Complete the transaction", status: "pending" });
-    }
-
-    if (steps.length === 0) {
-      steps.push(
-        { id: 1, action: "🌐 Navigate to page", status: "pending" },
-        { id: 2, action: "⚡ Perform action", status: "pending" },
-        { id: 3, action: "✅ Verify result", status: "pending" }
-      );
-    }
-
-    return steps;
-  };
-
-  const simulateStepExecution = async (step: Step, stepIndex: number): Promise<Step> => {
-    const reasoningPhases = [
-      { text: "🔍 Analyzing page structure and element selectors...", duration: 800 },
-      { text: "🎯 Locating target element on the page...", duration: 600 },
-      { text: "✅ Element found, validating state...", duration: 700 },
-      { text: "⚡ Executing action on element...", duration: 900 },
-      { text: "📸 Capturing screenshots and validating changes...", duration: 800 },
-    ];
-
-    for (const phase of reasoningPhases) {
-      setCurrentStepReasoning("");
-      for (let i = 0; i <= phase.text.length; i++) {
-        setCurrentStepReasoning(phase.text.substring(0, i));
-        await new Promise(resolve => setTimeout(resolve, 20));
-      }
-      await new Promise(resolve => setTimeout(resolve, phase.duration));
-    }
-
-    const isSuccess = Math.random() > 0.25;
-
-    const consoleLogs = isSuccess
-      ? [
-        `[${new Date().toISOString()}] Step ${stepIndex + 1}: Starting execution`,
-        `[${new Date().toISOString()}] Element selector found: .target-element-${stepIndex}`,
-        `[${new Date().toISOString()}] Action executed successfully`,
-        `[${new Date().toISOString()}] Validation passed: Expected state confirmed`
-      ]
-      : [
-        `[${new Date().toISOString()}] Step ${stepIndex + 1}: Starting execution`,
-        `[${new Date().toISOString()}] ERROR: Element not found`,
-        `[${new Date().toISOString()}] Timeout waiting for element (5000ms)`,
-        `[${new Date().toISOString()}] Test step failed`
-      ];
-
-    const networkLogs = isSuccess
-      ? [
-        `GET https://api.example.com/page-data - 200 OK (124ms)`,
-        `POST https://api.example.com/analytics - 204 No Content (45ms)`,
-      ]
-      : [
-        `GET https://api.example.com/page-data - 200 OK (124ms)`,
-        `GET https://api.example.com/element-check - 404 Not Found (67ms)`,
-      ];
-
-    return {
-      ...step,
-      status: isSuccess ? "passed" : "failed",
-      reasoning: isSuccess
-        ? `✓ Successfully executed: ${step.action}`
-        : `✗ Failed to execute: Element not found or selector changed`,
-      consoleLogs,
-      networkLogs,
-      beforeScreenshot: "/placeholder.svg",
-      afterScreenshot: "/placeholder.svg",
-    };
-  };
-
-  const executeScenario = async (scenarioId: string, scenarioName: string) => {
-    setScenarios(prev => {
-      const exists = prev.find(s => s.id === scenarioId);
-      if (exists) {
-        return prev.map(s =>
-          s.id === scenarioId
-            ? { ...s, status: "running", hasRun: true, steps: [] }
-            : s
-        );
-      } else {
-        return [...prev, {
-          id: scenarioId,
-          name: scenarioName,
-          status: "running",
-          hasRun: true,
-          steps: []
-        }];
-      }
-    });
-
-    setIsRunning(true);
-    setExecutingStepIndex(0);
-    setExecutingScenarioId(scenarioId);
-    setSelectedScenario(scenarioId);
-    setSelectedStepIndex(0);
-    setExpandedScenarioId(`scenario-${scenarioId}`);
-
-    try {
-      const stepsToExecute = generateStepsFromScenario(scenarioName);
-      const executedSteps: Step[] = [];
-      let allPassed = true;
-
-      for (let i = 0; i < stepsToExecute.length; i++) {
-        const currentStep = stepsToExecute[i];
-        setScenarios(prev => prev.map(s =>
-          s.id === scenarioId
-            ? { ...s, steps: [...executedSteps, { ...currentStep, status: "running" }] }
-            : s
-        ));
-
-        setSelectedStepIndex(i);
-        setExecutingStepIndex(i);
-
-        const executedStep = await simulateStepExecution(currentStep, i);
-        executedSteps.push(executedStep);
-
-        if (executedStep.status === "failed") {
-          allPassed = false;
-        }
-
-        setScenarios(prev => prev.map(s =>
-          s.id === scenarioId
-            ? { ...s, steps: executedSteps }
-            : s
-        ));
-
-        if (!allPassed) break;
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      const finalStatus = allPassed ? "passed" : "failed";
-      setScenarios(prev => prev.map(s =>
-        s.id === scenarioId
-          ? { ...s, status: finalStatus, steps: executedSteps }
-          : s
-      ));
-
-    } catch (error: any) {
-      console.error("Execution failed:", error);
-    } finally {
-      setIsRunning(false);
-      setExecutingStepIndex(null);
-      setCurrentStepReasoning("");
-      setExecutingScenarioId(null);
-    }
-  };
 
   const handleAddScenario = async () => {
     if (!newScenario.trim()) return;
@@ -376,18 +273,53 @@ export const TestSuiteRunsPage: React.FC = () => {
     await handleRunAll();
   };
 
-  const handleSaveAsDraft = () => {
-    if (!newScenario.trim()) return;
-    const newId = crypto.randomUUID();
-    setScenarios([...scenarios, {
-      id: newId,
-      name: newScenario,
-      status: "pending",
-      hasRun: false,
-      steps: [],
-    }]);
-    setNewScenario("");
-    setIsAddDialogOpen(false);
+  const handleSaveAsDraft = async () => {
+    if (!newScenario.trim() || !suiteId) return;
+
+    const suiteIdNum = parseInt(suiteId, 10);
+    if (isNaN(suiteIdNum)) {
+      toast({
+        title: "Error",
+        description: "Invalid test suite ID",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Create scenario via API
+      await createScenario({
+        test_suite_id: suiteIdNum,
+        name: newScenario.trim(),
+        description: null,
+      });
+
+      // Reload scenarios from API to get the latest data
+      const scenariosData = await getScenarios(suiteIdNum);
+      const transformedScenarios: Scenario[] = scenariosData.map(scenario => ({
+        id: scenario.id.toString(),
+        name: scenario.name,
+        status: "pending" as const,
+        hasRun: false,
+        steps: [],
+      }));
+
+      setScenarios(transformedScenarios);
+      setNewScenario("");
+      setIsAddDialogOpen(false);
+
+      toast({
+        title: "Success",
+        description: "Scenario saved as draft",
+      });
+    } catch (error) {
+      console.error("Error saving scenario:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save scenario",
+        variant: "destructive",
+      });
+    }
   };
 
 
@@ -413,6 +345,58 @@ export const TestSuiteRunsPage: React.FC = () => {
     setEditingScenario(null);
     // Run all scenarios when editing and clicking Run Now
     await handleRunAll();
+  };
+
+  const handleDeleteScenario = async () => {
+    if (!deletingScenario || !suiteId) return;
+
+    const suiteIdNum = parseInt(suiteId, 10);
+    const scenarioIdNum = parseInt(deletingScenario.id, 10);
+    
+    if (isNaN(suiteIdNum) || isNaN(scenarioIdNum)) {
+      toast({
+        title: "Error",
+        description: "Invalid test suite or scenario ID",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Delete scenario via API
+      await deleteScenario(scenarioIdNum);
+
+      // Reload scenarios from API to get the latest data
+      const scenariosData = await getScenarios(suiteIdNum);
+      const transformedScenarios: Scenario[] = scenariosData.map(scenario => ({
+        id: scenario.id.toString(),
+        name: scenario.name,
+        status: "pending" as const,
+        hasRun: false,
+        steps: [],
+      }));
+
+      setScenarios(transformedScenarios);
+      setIsDeleteDialogOpen(false);
+      setDeletingScenario(null);
+
+      // Clear selected scenario if it was deleted
+      if (selectedScenario === deletingScenario.id) {
+        setSelectedScenario(null);
+      }
+
+      toast({
+        title: "Success",
+        description: "Scenario deleted successfully",
+      });
+    } catch (error) {
+      console.error("Error deleting scenario:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to delete scenario",
+        variant: "destructive",
+      });
+    }
   };
 
   // Map API response to UI state
@@ -949,16 +933,15 @@ export const TestSuiteRunsPage: React.FC = () => {
         ) : (
           <>
             {/* Header */}
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold">{suiteInfo.name}</h2>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Button variant="ghost" size="sm" onClick={() => navigate("/test-suites")} className="text-muted-foreground hover:text-foreground">
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back
-                  </Button>
-                </div>
-                <div className="flex gap-3">
+            <div className="flex items-center justify-between mt-4">
+              <div className="flex items-center gap-3">
+                <Button variant="ghost" size="sm" onClick={() => navigate("/test-suites")} className="text-muted-foreground hover:text-foreground">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back
+                </Button>
+                <h2 className="text-2xl font-bold">{suiteInfo.name}</h2>
+              </div>
+              <div className="flex gap-3">
                   <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)} className="rounded-lg">
                     <Share2 className="h-4 w-4 mr-2" />
                     Share
@@ -966,7 +949,7 @@ export const TestSuiteRunsPage: React.FC = () => {
                   <Button
                     size="sm"
                     onClick={handleRunAll}
-                    disabled={isRunningAll[selectedPlatform] || isRunning || scenarios.length === 0 || selectedPlatform === "ios" || selectedPlatform === "android"}
+                    disabled={isRunningAll[selectedPlatform] || scenarios.length === 0 || selectedPlatform === "ios" || selectedPlatform === "android"}
                     className="bg-orange-500 hover:bg-orange-600 text-white rounded-lg"
                   >
                     {isRunningAll[selectedPlatform] ? (
@@ -981,7 +964,6 @@ export const TestSuiteRunsPage: React.FC = () => {
                       </>
                     )}
                   </Button>
-                </div>
               </div>
             </div>
 
@@ -1118,6 +1100,28 @@ export const TestSuiteRunsPage: React.FC = () => {
                               </Tooltip>
                             </TooltipProvider>
 
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeletingScenario({ id: scenario.id, name: scenario.name });
+                                      setIsDeleteDialogOpen(true);
+                                    }}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Delete Scenario</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+
                             {scenario.status === 'failed' && (
                               <TooltipProvider>
                                 <Tooltip>
@@ -1181,63 +1185,41 @@ export const TestSuiteRunsPage: React.FC = () => {
                       <AccordionContent className="px-4 pb-4">
                         {scenario.hasRun ? (
                           <div className="space-y-2">
-                            {[...scenario.steps].sort((a, b) => a.id - b.id).map((step, index) => {
-                              const isCurrentlyExecuting = executingScenarioId === scenario.id && executingStepIndex === index;
-
-                              return (
-                                <div
-                                  key={step.id}
-                                  className={cn(
-                                    "flex items-start gap-3 p-3 rounded transition-all cursor-pointer",
-                                    isCurrentlyExecuting
-                                      ? 'bg-primary/10 border-2 border-primary shadow-md'
-                                      : 'bg-muted/30 hover:bg-muted/50'
-                                  )}
-                                  onClick={() => {
-                                    if (!isCurrentlyExecuting) {
-                                      setSelectedStepIndex(index);
-                                      // Reset screenshot carousel when selecting a new step
-                                      const sortedSteps = [...scenario.steps].sort((a, b) => a.id - b.id);
-                                      const stepsWithScreenshots = sortedSteps.filter(
-                                        s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
-                                      );
-                                      const newIndex = stepsWithScreenshots.findIndex(s => s.id === step.id);
-                                      if (newIndex >= 0) {
-                                        setCurrentScreenshotIndex(newIndex);
-                                      }
-                                    }
-                                  }}
-                                >
-                                  <div className="flex-shrink-0 mt-0.5">
-                                    {isCurrentlyExecuting ? (
-                                      <Loader2 className="h-5 w-5 text-primary animate-spin" />
-                                    ) : (
-                                      getStatusIcon(step.status)
-                                    )}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium">
-                                      {step.action}
-                                    </p>
-
-                                    {isCurrentlyExecuting && currentStepReasoning && (
-                                      <div className="mt-2 p-2 bg-background/50 rounded border border-primary/20">
-                                        <p className="text-xs font-mono text-primary">
-                                          {currentStepReasoning}
-                                          <span className="animate-pulse ml-1">|</span>
-                                        </p>
-                                      </div>
-                                    )}
-
-                                    {!isCurrentlyExecuting && step.reasoning && (
-                                      <p className="text-xs text-muted-foreground mt-2 italic">
-                                        {step.reasoning}
-                                      </p>
-                                    )}
-                                  </div>
+                            {[...scenario.steps].sort((a, b) => a.id - b.id).map((step, index) => (
+                              <div
+                                key={step.id}
+                                className={cn(
+                                  "flex items-start gap-3 p-3 rounded transition-all cursor-pointer",
+                                  'bg-muted/30 hover:bg-muted/50'
+                                )}
+                                onClick={() => {
+                                  setSelectedStepIndex(index);
+                                  // Reset screenshot carousel when selecting a new step
+                                  const sortedSteps = [...scenario.steps].sort((a, b) => a.id - b.id);
+                                  const stepsWithScreenshots = sortedSteps.filter(
+                                    s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
+                                  );
+                                  const newIndex = stepsWithScreenshots.findIndex(s => s.id === step.id);
+                                  if (newIndex >= 0) {
+                                    setCurrentScreenshotIndex(newIndex);
+                                  }
+                                }}
+                              >
+                                <div className="flex-shrink-0 mt-0.5">
+                                  {getStatusIcon(step.status)}
                                 </div>
-                              );
-                            })}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium">
+                                    {step.action}
+                                  </p>
+                                  {step.reasoning && (
+                                    <p className="text-xs text-muted-foreground mt-2 italic">
+                                      {step.reasoning}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <div className="bg-muted/30 rounded-lg p-6 text-center mt-2">
@@ -1674,6 +1656,35 @@ export const TestSuiteRunsPage: React.FC = () => {
                   >
                     <Sparkles className="h-4 w-4 mr-2" />
                     Run Now
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Delete Scenario Dialog */}
+            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Delete Scenario</DialogTitle>
+                  <DialogDescription>
+                    Are you sure you want to delete "{deletingScenario?.name}"? This action cannot be undone.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsDeleteDialogOpen(false);
+                      setDeletingScenario(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteScenario}
+                  >
+                    Delete
                   </Button>
                 </DialogFooter>
               </DialogContent>

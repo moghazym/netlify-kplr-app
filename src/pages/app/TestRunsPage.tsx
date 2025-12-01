@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
@@ -67,20 +67,39 @@ export const TestRunsPage: React.FC = () => {
     }
   }, [user, selectedProject]);
 
-  useEffect(() => {
-    if (user && selectedProject && suitesLoaded) {
-      setCurrentPage(1); // Reset to first page when filters change
-      fetchTestRuns();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, selectedProject, suitesLoaded, selectedSuite, selectedStatus, startDate, endDate]);
+  // Track if this is the initial mount to prevent duplicate calls
+  const isInitialMount = useRef(true);
+  const prevFilters = useRef({ selectedSuite, selectedStatus, startDate, endDate });
 
   useEffect(() => {
     if (user && selectedProject && suitesLoaded) {
+      // Check if filters changed
+      const filtersChanged = 
+        prevFilters.current.selectedSuite !== selectedSuite ||
+        prevFilters.current.selectedStatus !== selectedStatus ||
+        prevFilters.current.startDate !== startDate ||
+        prevFilters.current.endDate !== endDate;
+
+      // Reset to first page when filters change (but not on initial mount)
+      if (filtersChanged && !isInitialMount.current && currentPage !== 1) {
+        setCurrentPage(1);
+        prevFilters.current = { selectedSuite, selectedStatus, startDate, endDate };
+        return; // currentPage change will trigger fetch
+      }
+
+      // Update filters ref
+      prevFilters.current = { selectedSuite, selectedStatus, startDate, endDate };
+
+      // Mark that initial mount is done
+      if (isInitialMount.current) {
+        isInitialMount.current = false;
+      }
+
+      // Fetch test runs
       fetchTestRuns();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage]);
+  }, [user, selectedProject, suitesLoaded, selectedSuite, selectedStatus, startDate, endDate, currentPage]);
 
   const fetchSuites = async () => {
     if (!selectedProject) {

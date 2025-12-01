@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { SidebarTrigger } from "../../components/ui/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
@@ -12,9 +11,6 @@ import {
   Share2,
   ArrowLeft,
   Loader2,
-  Bug,
-  RotateCcw,
-  ExternalLink,
   Copy,
   Check,
   ChevronLeft,
@@ -26,11 +22,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "../../components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../components/ui/tooltip";
 import { useAuth } from "../../contexts/AuthContext";
-import { useProject } from "../../contexts/ProjectContext";
 import { cn } from "../../lib/utils";
 import {
   getTestRun,
   getTestSuite,
+  getScenarios,
   TestRunWithSessionsResponse
 } from "../../lib/api-client";
 import { useToast } from "../../hooks/use-toast";
@@ -59,7 +55,6 @@ export const TestRunDetailPage: React.FC = () => {
   const { runId } = useParams<{ runId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { selectedProject } = useProject();
   const { toast } = useToast();
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [selectedStepIndex, setSelectedStepIndex] = useState(0);
@@ -69,19 +64,11 @@ export const TestRunDetailPage: React.FC = () => {
   const [showAllLogs, setShowAllLogs] = useState(false);
   const [currentScreenshotIndex, setCurrentScreenshotIndex] = useState(0);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
-  const [selectedPlatform, setSelectedPlatform] = useState<string>("web");
 
   const [suiteInfo, setSuiteInfo] = useState<{ name: string; description?: string } | null>(null);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [testRun, setTestRun] = useState<TestRunWithSessionsResponse | null>(null);
-
-  // Determine platform from test run
-  useEffect(() => {
-    if (testRun?.platform) {
-      setSelectedPlatform(testRun.platform.toLowerCase());
-    }
-  }, [testRun]);
 
   // Helper function to construct full image URL from filename or path
   const getImageUrl = (imagePath: string | undefined | null): string | undefined => {
@@ -126,8 +113,11 @@ export const TestRunDetailPage: React.FC = () => {
       // Load test run first
       const testRunData = await getTestRun(runIdNum);
       
-      // Then load suite using the test run's suite ID
-      const suiteData = await getTestSuite(testRunData.test_suite_id).catch(() => null);
+      // Then load suite and scenarios using the test run's suite ID
+      const [suiteData, scenariosData] = await Promise.all([
+        getTestSuite(testRunData.test_suite_id).catch(() => null),
+        getScenarios(testRunData.test_suite_id).catch(() => []),
+      ]);
 
       setTestRun(testRunData);
 
@@ -143,8 +133,8 @@ export const TestRunDetailPage: React.FC = () => {
         });
       }
 
-      // Map test run to scenarios
-      const mappedScenarios = mapTestRunToScenarios(testRunData, false);
+      // Map test run to scenarios, ensuring we use backend scenario names
+      const mappedScenarios = mapTestRunToScenarios(testRunData, false, scenariosData);
       console.log("Mapped scenarios:", mappedScenarios);
       console.log("Test run data:", testRunData);
       setScenarios(mappedScenarios);
@@ -167,7 +157,7 @@ export const TestRunDetailPage: React.FC = () => {
   };
 
   // Map API response to UI state (similar to TestSuiteRunsPage)
-  const mapTestRunToScenarios = (testRun: TestRunWithSessionsResponse, isTestRunActive: boolean = false): Scenario[] => {
+  const mapTestRunToScenarios = (testRun: TestRunWithSessionsResponse, isTestRunActive: boolean = false, backendScenarios?: Array<{ id: number; name: string }>): Scenario[] => {
     const mappedScenarios: Scenario[] = [];
     const isTestRunComplete = testRun.status === "completed" || testRun.status === "failed";
 
@@ -266,9 +256,13 @@ export const TestRunDetailPage: React.FC = () => {
           scenarioStatus = isTestRunActive ? "running" : ((apiScenario.status as "pending" | "running" | "passed" | "failed") || "running");
         }
 
+        // Use backend scenario name if available, otherwise use API scenario name
+        const backendScenario = backendScenarios?.find(s => s.id === apiScenario.id);
+        const scenarioName = backendScenario?.name || apiScenario.name;
+
         mappedScenarios.push({
           id: apiScenario.id.toString(),
-          name: apiScenario.name,
+          name: scenarioName,
           status: scenarioStatus,
           hasRun: true,
           steps,
@@ -277,7 +271,9 @@ export const TestRunDetailPage: React.FC = () => {
     } else if (testRun.sessions && testRun.sessions.length > 0) {
       testRun.sessions.forEach((session, index) => {
         const scenarioId = session.scenario_id?.toString() || `session-${index}`;
-        const scenarioName = session.scenario?.name || `Scenario ${index + 1}`;
+        // Use backend scenario name if available, otherwise use session scenario name or fallback
+        const backendScenario = session.scenario_id ? backendScenarios?.find(s => s.id === session.scenario_id) : null;
+        const scenarioName = backendScenario?.name || session.scenario?.name || `Scenario ${index + 1}`;
 
         const allSteps = session.steps || session.scenario?.steps || [];
         const steps: Step[] = allSteps.map((apiStep, stepIndex) => {
@@ -413,7 +409,6 @@ export const TestRunDetailPage: React.FC = () => {
       {/* Top Bar with Test Title */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <SidebarTrigger className="-ml-1" />
           <Button variant="ghost" size="sm" onClick={() => navigate("/test-runs")}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
@@ -426,13 +421,15 @@ export const TestRunDetailPage: React.FC = () => {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" disabled className="opacity-50 cursor-not-allowed">
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share
-                </Button>
+                <span className="inline-block">
+                  <Button variant="outline" size="sm" disabled className="opacity-50 cursor-not-allowed">
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share
+                  </Button>
+                </span>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Coming Soon</p>
+                <p>coming soon</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>

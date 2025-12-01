@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Plus, Calendar, Clock, Play, Pause, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProject } from "@/contexts/ProjectContext";
 import { useToast } from "@/hooks/use-toast";
 import { CreateScheduleDialog } from "@/components/CreateScheduleDialog";
 import { WeeklyCalendarView } from "@/components/WeeklyCalendarView";
@@ -26,22 +27,41 @@ import {
 
 export default function SchedulerPage() {
   const { user } = useAuth();
+  const { selectedProject } = useProject();
   const { toast } = useToast();
   const [schedules, setSchedules] = useState<ScheduleResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const isFetchingSchedulesRef = useRef(false);
+  const lastProjectIdRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (user) {
-      fetchSchedules();
+    if (user && selectedProject) {
+      // Prevent duplicate calls - only fetch if project changed or not currently fetching
+      const projectChanged = lastProjectIdRef.current !== selectedProject.id;
+      if (projectChanged && !isFetchingSchedulesRef.current) {
+        isFetchingSchedulesRef.current = true;
+        lastProjectIdRef.current = selectedProject.id;
+        fetchSchedules().finally(() => {
+          isFetchingSchedulesRef.current = false;
+        });
+      }
+    } else if (user && !selectedProject) {
+      setLoading(false);
+      lastProjectIdRef.current = null;
     }
-  }, [user]);
+  }, [user, selectedProject]);
 
   const fetchSchedules = async () => {
+    if (!selectedProject) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      const data = await getSchedules();
+      const data = await getSchedules({ project_id: selectedProject.id });
       // Sort by created_at descending
       const sorted = data.sort((a, b) => {
         const aDate = a.created_at ? new Date(a.created_at).getTime() : 0;

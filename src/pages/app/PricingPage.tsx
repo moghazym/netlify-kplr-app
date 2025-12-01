@@ -1,11 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DollarSign, TrendingUp, Calendar, Download } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
-import { useProject } from "@/contexts/ProjectContext";
 import { useEffect, useState } from "react";
-import { useToast } from "@/hooks/use-toast";
-import { getTestSuites, getTestRunsForSuite } from "@/lib/api-client";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, BarChart, Bar } from "recharts";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
@@ -13,8 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon } from "lucide-react";
 
 // Pricing configuration
-const COST_PER_SCENARIO = 0.05; // $0.05 per scenario execution
-const COST_PER_TEST_RUN = 0.10; // $0.10 per test run
+const COST_PER_SCENARIO = 0; // Free per scenario execution
+const COST_PER_TEST_RUN = 0; // Free per test run
 const FREE_TIER_SCENARIOS = 100; // 100 free scenarios per month
 
 interface UsageStats {
@@ -47,10 +43,7 @@ interface DateRange {
 }
 
 export default function PricingPage() {
-  const { user } = useAuth();
-  const { selectedProject } = useProject();
-  const { toast } = useToast();
-  const [stats, setStats] = useState<UsageStats>({
+  const [stats] = useState<UsageStats>({
     totalExecutions: 0,
     totalScenarios: 0,
     totalCost: 0,
@@ -58,140 +51,147 @@ export default function PricingPage() {
     paidScenarios: 0,
     currentMonthCost: 0,
   });
-  const [usageHistory, setUsageHistory] = useState<UsageHistory[]>([]);
-  const [executionDetails, setExecutionDetails] = useState<ExecutionDetail[]>([]);
+  const [usageHistory] = useState<UsageHistory[]>([]);
+  const [executionDetails] = useState<ExecutionDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange>({
     from: startOfDay(subDays(new Date(), 30)),
     to: endOfDay(new Date()),
   });
 
+  // API calls disabled for now
+  // useEffect(() => {
+  //   if (user && selectedProject) {
+  //     fetchUsageData();
+  //   } else if (user && !selectedProject) {
+  //     setLoading(false);
+  //   }
+  // }, [user, selectedProject, dateRange]);
+  
+  // Set loading to false on mount since we're not fetching data
   useEffect(() => {
-    if (user && selectedProject) {
-      fetchUsageData();
-    } else if (user && !selectedProject) {
-      setLoading(false);
-    }
-  }, [user, selectedProject, dateRange]);
+    setLoading(false);
+  }, []);
 
-  const fetchUsageData = async () => {
-    if (!selectedProject) {
-      setLoading(false);
-      return;
-    }
+  // API calls disabled for now
+  // const fetchUsageData = async () => {
+  //   if (!selectedProject) {
+  //     setLoading(false);
+  //     return;
+  //   }
+  //
+  //   try {
+  //     setLoading(true);
+  //
+  //     // Get all test suites for the selected project
+  //     const testSuites = await getTestSuites(selectedProject.id);
+  //     
+  //     // Fetch test runs for all suites
+  //     const allRunsPromises = testSuites.map(suite => 
+  //       getTestRunsForSuite(suite.id).catch(err => {
+  //         console.warn(`Error fetching runs for suite ${suite.id}:`, err);
+  //         return [];
+  //       })
+  //     );
+  //     
+  //     const allRunsArrays = await Promise.all(allRunsPromises);
+  //     const allRuns = allRunsArrays.flat();
+  //     
+  //     // Filter runs by date range
+  //     const dateFrom = dateRange.from.getTime();
+  //     const dateTo = dateRange.to.getTime();
+  //     
+  //     const runs = allRuns.filter(run => {
+  //       const runDate = new Date(run.started_at).getTime();
+  //       return runDate >= dateFrom && runDate <= dateTo;
+  //     });
+  //
+  //     // Create a map of suite IDs to suite names for lookup
+  //     const suiteMap = new Map<number, string>();
+  //     testSuites.forEach(suite => {
+  //       suiteMap.set(suite.id, suite.name);
+  //     });
+  //
+  //     // Calculate statistics
+  //     const totalExecutions = runs.length;
+  //     const totalScenarios = runs.reduce((sum, run) => sum + run.total_scenarios, 0);
+  //     
+  //     // Calculate free vs paid scenarios
+  //     const freeScenarios = Math.min(totalScenarios, FREE_TIER_SCENARIOS);
+  //     const paidScenarios = Math.max(0, totalScenarios - FREE_TIER_SCENARIOS);
+  //     
+  //     // Calculate total cost
+  //     const totalCost = (totalExecutions * COST_PER_TEST_RUN) + (paidScenarios * COST_PER_SCENARIO);
 
-    try {
-      setLoading(true);
-
-      // Get all test suites for the selected project
-      const testSuites = await getTestSuites(selectedProject.id);
-      
-      // Fetch test runs for all suites
-      const allRunsPromises = testSuites.map(suite => 
-        getTestRunsForSuite(suite.id).catch(err => {
-          console.warn(`Error fetching runs for suite ${suite.id}:`, err);
-          return [];
-        })
-      );
-      
-      const allRunsArrays = await Promise.all(allRunsPromises);
-      const allRuns = allRunsArrays.flat();
-      
-      // Filter runs by date range
-      const dateFrom = dateRange.from.getTime();
-      const dateTo = dateRange.to.getTime();
-      
-      const runs = allRuns.filter(run => {
-        const runDate = new Date(run.started_at).getTime();
-        return runDate >= dateFrom && runDate <= dateTo;
-      });
-
-      // Create a map of suite IDs to suite names for lookup
-      const suiteMap = new Map<number, string>();
-      testSuites.forEach(suite => {
-        suiteMap.set(suite.id, suite.name);
-      });
-
-      // Calculate statistics
-      const totalExecutions = runs.length;
-      const totalScenarios = runs.reduce((sum, run) => sum + run.total_scenarios, 0);
-      
-      // Calculate free vs paid scenarios
-      const freeScenarios = Math.min(totalScenarios, FREE_TIER_SCENARIOS);
-      const paidScenarios = Math.max(0, totalScenarios - FREE_TIER_SCENARIOS);
-      
-      // Calculate total cost
-      const totalCost = (totalExecutions * COST_PER_TEST_RUN) + (paidScenarios * COST_PER_SCENARIO);
-
-      // Calculate current month cost
-      const currentMonthStart = new Date();
-      currentMonthStart.setDate(1);
-      currentMonthStart.setHours(0, 0, 0, 0);
-      
-      const monthRuns = runs.filter(run => {
-        const runDate = new Date(run.started_at).getTime();
-        return runDate >= currentMonthStart.getTime();
-      });
-
-      const monthScenarios = monthRuns.reduce((sum, run) => sum + run.total_scenarios, 0);
-      const monthPaidScenarios = Math.max(0, monthScenarios - FREE_TIER_SCENARIOS);
-      const currentMonthCost = (monthRuns.length * COST_PER_TEST_RUN) + (monthPaidScenarios * COST_PER_SCENARIO);
-
-      setStats({
-        totalExecutions,
-        totalScenarios,
-        totalCost,
-        freeScenarios,
-        paidScenarios,
-        currentMonthCost,
-      });
-
-      // Generate usage history
-      const historyMap = new Map<string, { executions: number; scenarios: number }>();
-      runs.forEach((run) => {
-        const dateKey = format(new Date(run.started_at), "MMM dd");
-        const existing = historyMap.get(dateKey) || { executions: 0, scenarios: 0 };
-        historyMap.set(dateKey, {
-          executions: existing.executions + 1,
-          scenarios: existing.scenarios + run.total_scenarios,
-        });
-      });
-
-      const history: UsageHistory[] = Array.from(historyMap.entries())
-        .map(([date, data]) => ({
-          date,
-          executions: data.executions,
-          scenarios: data.scenarios,
-          cost: (data.executions * COST_PER_TEST_RUN) + (Math.max(0, data.scenarios - (FREE_TIER_SCENARIOS / 30)) * COST_PER_SCENARIO),
-        }))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      setUsageHistory(history);
-
-      // Format execution details
-      const details: ExecutionDetail[] = runs
-        .slice(0, 20)
-        .map((run) => ({
-          id: String(run.id),
-          suite_name: suiteMap.get(run.test_suite_id) || "Unknown Suite",
-          scenarios: run.total_scenarios,
-          cost: COST_PER_TEST_RUN + (Math.max(0, run.total_scenarios - (FREE_TIER_SCENARIOS / (totalExecutions || 1))) * COST_PER_SCENARIO),
-          started_at: new Date(run.started_at).toLocaleString(),
-        }));
-
-      setExecutionDetails(details);
-
-    } catch (error) {
-      console.error("Error fetching usage data:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to load usage data",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  //     // Calculate current month cost
+  //     const currentMonthStart = new Date();
+  //     currentMonthStart.setDate(1);
+  //     currentMonthStart.setHours(0, 0, 0, 0);
+  //     
+  //     const monthRuns = runs.filter(run => {
+  //       const runDate = new Date(run.started_at).getTime();
+  //       return runDate >= currentMonthStart.getTime();
+  //     });
+  //
+  //     const monthScenarios = monthRuns.reduce((sum, run) => sum + run.total_scenarios, 0);
+  //     const monthPaidScenarios = Math.max(0, monthScenarios - FREE_TIER_SCENARIOS);
+  //     const currentMonthCost = (monthRuns.length * COST_PER_TEST_RUN) + (monthPaidScenarios * COST_PER_SCENARIO);
+  //
+  //     setStats({
+  //       totalExecutions,
+  //       totalScenarios,
+  //       totalCost,
+  //       freeScenarios,
+  //       paidScenarios,
+  //       currentMonthCost,
+  //     });
+  //
+  //     // Generate usage history
+  //     const historyMap = new Map<string, { executions: number; scenarios: number }>();
+  //     runs.forEach((run) => {
+  //       const dateKey = format(new Date(run.started_at), "MMM dd");
+  //       const existing = historyMap.get(dateKey) || { executions: 0, scenarios: 0 };
+  //       historyMap.set(dateKey, {
+  //         executions: existing.executions + 1,
+  //         scenarios: existing.scenarios + run.total_scenarios,
+  //       });
+  //     });
+  //
+  //     const history: UsageHistory[] = Array.from(historyMap.entries())
+  //       .map(([date, data]) => ({
+  //         date,
+  //         executions: data.executions,
+  //         scenarios: data.scenarios,
+  //         cost: (data.executions * COST_PER_TEST_RUN) + (Math.max(0, data.scenarios - (FREE_TIER_SCENARIOS / 30)) * COST_PER_SCENARIO),
+  //       }))
+  //       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  //
+  //     setUsageHistory(history);
+  //
+  //     // Format execution details
+  //     const details: ExecutionDetail[] = runs
+  //       .slice(0, 20)
+  //       .map((run) => ({
+  //         id: String(run.id),
+  //         suite_name: suiteMap.get(run.test_suite_id) || "Unknown Suite",
+  //         scenarios: run.total_scenarios,
+  //         cost: COST_PER_TEST_RUN + (Math.max(0, run.total_scenarios - (FREE_TIER_SCENARIOS / (totalExecutions || 1))) * COST_PER_SCENARIO),
+  //         started_at: new Date(run.started_at).toLocaleString(),
+  //       }));
+  //
+  //     setExecutionDetails(details);
+  //
+  //   } catch (error) {
+  //     console.error("Error fetching usage data:", error);
+  //     toast({
+  //       title: "Error",
+  //       description: error instanceof Error ? error.message : "Failed to load usage data",
+  //       variant: "destructive",
+  //     });
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const chartConfig = {
     cost: {
@@ -277,7 +277,7 @@ export default function PricingPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <DollarSign className="h-5 w-5 text-primary" />
-            Current Plan: Pay As You Go
+            Current Plan: Basic
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -288,11 +288,11 @@ export default function PricingPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Per Test Run</p>
-              <p className="text-2xl font-bold">${COST_PER_TEST_RUN}</p>
+              <p className="text-2xl font-bold">Free</p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Per Additional Scenario</p>
-              <p className="text-2xl font-bold">${COST_PER_SCENARIO}</p>
+              <p className="text-2xl font-bold">Free</p>
             </div>
           </div>
         </CardContent>

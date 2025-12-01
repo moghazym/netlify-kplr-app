@@ -12,28 +12,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChevronLeft, Sparkles, Upload, X, FileText, Image as ImageIcon, PenTool } from "lucide-react";
+import { ChevronLeft, Sparkles, Upload, X, FileText, Image as ImageIcon, PenTool, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProject } from "@/contexts/ProjectContext";
 import { useToast } from "@/hooks/use-toast";
 import { 
   createTestSuite, 
-  getProjects,
   createScenario,
   uploadTestSuiteAttachments,
-  type TestSuiteCreate,
-  type ProjectResponse 
+  generateScenarios,
+  type TestSuiteCreate
 } from "@/lib/api-client";
-import { GenerateScenariosDialog } from "@/components/GenerateScenariosDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export default function CreateTestSuitePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { selectedProject } = useProject();
   const { toast } = useToast();
   const [uploadingFiles, setUploadingFiles] = useState(false);
-  const [projects, setProjects] = useState<ProjectResponse[]>([]);
   const [attachments, setAttachments] = useState<File[]>([]);
-  const [showScenariosDialog, setShowScenariosDialog] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const [formData, setFormData] = useState<TestSuiteCreate>({
     name: "",
@@ -47,29 +46,15 @@ export default function CreateTestSuitePage() {
     has_persistent_context: false,
     exploration_enabled: false,
     exploration_step_limit: null,
-    project_id: 0, // Will be set when projects load
+    project_id: 0, // Will be set from selectedProject
   });
 
+  // Set project_id from selectedProject when available
   useEffect(() => {
-    if (user) {
-      fetchProjects();
+    if (selectedProject && formData.project_id === 0) {
+      setFormData(prev => ({ ...prev, project_id: selectedProject.id }));
     }
-  }, [user]);
-
-  const fetchProjects = async () => {
-    try {
-      const projectsData = await getProjects();
-      setProjects(projectsData);
-      
-      // Auto-select first project if available
-      if (projectsData.length > 0 && formData.project_id === 0) {
-        setFormData(prev => ({ ...prev, project_id: projectsData[0].id }));
-      }
-    } catch (error) {
-      console.error('Error fetching projects:', error);
-      // Silently fail - project will need to be set elsewhere
-    }
-  };
+  }, [selectedProject]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -133,6 +118,15 @@ export default function CreateTestSuitePage() {
       return;
     }
 
+    if (!formData.description?.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please provide a test suite description",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!formData.project_id || formData.project_id === 0) {
       toast({
         title: "Error",
@@ -191,7 +185,7 @@ export default function CreateTestSuitePage() {
     }
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!formData.name.trim()) {
       toast({
         title: "Missing information",
@@ -209,8 +203,54 @@ export default function CreateTestSuitePage() {
       });
       return;
     }
-    
-    setShowScenariosDialog(true);
+
+    if (!formData.project_id || formData.project_id === 0) {
+      toast({
+        title: "Error",
+        description: "Please select a project/workspace",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!formData.description?.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please provide a test suite description for AI generation",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setIsGenerating(true);
+      
+      // Generate scenarios using AI
+      const response = await generateScenarios({
+        test_suite_name: formData.name.trim(),
+        application_url: formData.application_url.trim(),
+        test_description: formData.description.trim(),
+        ai_testing_instructions: formData.ai_testing_instructions?.trim() || undefined,
+      });
+
+      // Create test suite with generated scenarios
+      await handleApplyScenarios(
+        response.scenarios.map((scenario, index) => ({
+          id: `scenario-${index}`,
+          name: scenario,
+          description: scenario,
+        }))
+      );
+    } catch (error) {
+      console.error("Error generating scenarios:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to generate scenarios",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleApplyScenarios = async (scenarios: Array<{ id: string; name: string; description: string }>) => {
@@ -310,6 +350,15 @@ export default function CreateTestSuitePage() {
       return;
     }
 
+    if (!formData.description?.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please provide a test suite description",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!formData.project_id || formData.project_id === 0) {
       toast({
         title: "Error",
@@ -380,8 +429,8 @@ export default function CreateTestSuitePage() {
           <div className="space-y-6">
             <Tabs 
               value={formData.creation_mode || "manual"} 
-              onValueChange={(value: "manual" | "ai") => 
-                setFormData({ ...formData, creation_mode: value })
+              onValueChange={(value) => 
+                setFormData({ ...formData, creation_mode: value as "manual" | "ai" })
               }
               className="w-full"
             >
@@ -430,13 +479,16 @@ export default function CreateTestSuitePage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="description">Test Description (Optional)</Label>
+                  <Label htmlFor="description">
+                    Test Description <span className="text-destructive">*</span>
+                  </Label>
                   <Textarea
                     id="description"
                     placeholder="Describe what you want to test. For example: Test the login flow including email validation, password requirements, forgot password, and session management..."
                     className="mt-2 min-h-[150px]"
                     value={formData.description || ""}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value || null })}
+                    required
                   />
                 </div>
 
@@ -523,7 +575,7 @@ export default function CreateTestSuitePage() {
                   <Button 
                     className="gap-2 flex-1"
                     onClick={handleCreateTestSuite}
-                    disabled={uploadingFiles || !formData.name.trim() || !formData.application_url?.trim()}
+                    disabled={uploadingFiles || !formData.name.trim() || !formData.application_url?.trim() || !formData.description?.trim()}
                   >
                     {uploadingFiles ? "Creating..." : "Create Test Suite"}
                   </Button>
@@ -563,13 +615,16 @@ export default function CreateTestSuitePage() {
                 </div>
 
                 <div>
-                  <Label htmlFor="description-ai">Test Description (Optional)</Label>
+                  <Label htmlFor="description-ai">
+                    Test Description <span className="text-destructive">*</span>
+                  </Label>
                   <Textarea
                     id="description-ai"
                     placeholder="Describe what you want to test. For example: Test the login flow including email validation, password requirements, forgot password, and session management..."
                     className="mt-2 min-h-[150px]"
                     value={formData.description || ""}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value || null })}
+                    required
                   />
                 </div>
 
@@ -768,15 +823,24 @@ export default function CreateTestSuitePage() {
                   <Button 
                     className="gap-2 flex-1"
                     onClick={handleGenerate}
-                    disabled={uploadingFiles || !formData.name.trim() || !formData.application_url?.trim()}
+                    disabled={uploadingFiles || isGenerating || !formData.name.trim() || !formData.application_url?.trim() || !formData.description?.trim()}
                   >
-                    <Sparkles className="w-4 h-4" />
-                    Generate Scenarios
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Generating...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        Generate Scenarios
+                      </>
+                    )}
                   </Button>
                   <Button 
                     variant="outline"
                     onClick={handleSaveDraft}
-                    disabled={uploadingFiles || !formData.name.trim() || !formData.application_url?.trim()}
+                    disabled={uploadingFiles || !formData.name.trim() || !formData.application_url?.trim() || !formData.description?.trim()}
                   >
                     {uploadingFiles ? "Saving..." : "Save as Draft"}
                   </Button>
@@ -786,15 +850,6 @@ export default function CreateTestSuitePage() {
           </div>
         </Card>
 
-        <GenerateScenariosDialog
-          open={showScenariosDialog}
-          onOpenChange={setShowScenariosDialog}
-          onApply={handleApplyScenarios}
-          suiteName={formData.name}
-          description={formData.description || ""}
-          url={formData.application_url}
-          aiInstructions={formData.ai_testing_instructions}
-        />
       </div>
     </div>
   );
