@@ -43,10 +43,10 @@ const menuItems = [
   { title: "Test Suites", url: "/test-suites", icon: FileText },
   { title: "Test Runs", url: "/test-runs", icon: PlayCircle },
   { title: "Scheduler", url: "/scheduler", icon: Calendar },
-  { title: "App Registry", url: "/app-registry", icon: Smartphone },
   { title: "Usage & Billing", url: "/pricing", icon: CreditCard },
   { title: "Secrets & Variables", url: "/secrets", icon: Key },
-  { title: "Integrations", url: "/integrations", icon: Settings },
+  { title: "App Registry", url: "/app-registry", icon: Smartphone, comingSoon: true },
+  { title: "Integrations", url: "/integrations", icon: Settings, comingSoon: true },
 ];
 
 export function AppSidebar() {
@@ -196,9 +196,12 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {menuItems.map((item) => (
+                {menuItems.filter(item => !item.comingSoon).map((item) => (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild tooltip={collapsed ? item.title : undefined}>
+                    <SidebarMenuButton 
+                      asChild
+                      tooltip={collapsed ? item.title : undefined}
+                    >
                       <NavLink
                         to={item.url}
                         end={item.url === "/"}
@@ -212,6 +215,30 @@ export function AppSidebar() {
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
+                {menuItems.filter(item => item.comingSoon).length > 0 && (
+                  <>
+                    {menuItems.filter(item => item.comingSoon).map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton 
+                          asChild={false}
+                          tooltip={collapsed ? item.title : undefined}
+                          disabled={true}
+                          className="opacity-50 cursor-not-allowed"
+                        >
+                          <div className="flex items-center gap-2 w-full">
+                            <item.icon className="h-4 w-4" />
+                            {!collapsed && (
+                              <span className="flex items-center gap-2">
+                                <span>{item.title}</span>
+                                <span className="text-xs text-muted-foreground">(Coming Soon)</span>
+                              </span>
+                            )}
+                          </div>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

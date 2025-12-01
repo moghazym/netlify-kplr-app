@@ -19,9 +19,12 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Globe,
+  Smartphone,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../components/ui/tooltip";
 import { useAuth } from "../../contexts/AuthContext";
 import { useProject } from "../../contexts/ProjectContext";
 import { cn } from "../../lib/utils";
@@ -72,6 +75,13 @@ export const TestRunDetailPage: React.FC = () => {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [testRun, setTestRun] = useState<TestRunWithSessionsResponse | null>(null);
+
+  // Determine platform from test run
+  useEffect(() => {
+    if (testRun?.platform) {
+      setSelectedPlatform(testRun.platform.toLowerCase());
+    }
+  }, [testRun]);
 
   // Helper function to construct full image URL from filename or path
   const getImageUrl = (imagePath: string | undefined | null): string | undefined => {
@@ -135,6 +145,8 @@ export const TestRunDetailPage: React.FC = () => {
 
       // Map test run to scenarios
       const mappedScenarios = mapTestRunToScenarios(testRunData, false);
+      console.log("Mapped scenarios:", mappedScenarios);
+      console.log("Test run data:", testRunData);
       setScenarios(mappedScenarios);
 
       // Auto-select first scenario if available
@@ -411,10 +423,19 @@ export const TestRunDetailPage: React.FC = () => {
           )}
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)}>
-            <Share2 className="h-4 w-4 mr-2" />
-            Share
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="sm" disabled className="opacity-50 cursor-not-allowed">
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Share
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Coming Soon</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
@@ -467,26 +488,46 @@ export const TestRunDetailPage: React.FC = () => {
               </Card>
             )}
 
-            {/* Platform Tabs */}
-            <Tabs value={selectedPlatform} onValueChange={setSelectedPlatform}>
-              <TabsList>
-                <TabsTrigger value="web">Web</TabsTrigger>
-                <TabsTrigger value="ios">iOS</TabsTrigger>
-                <TabsTrigger value="android">Android</TabsTrigger>
-              </TabsList>
-              <TabsContent value="web" className="mt-4 space-y-6">
-                {/* Two Column Layout */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Left Column - Scenarios List */}
-                  <div className="space-y-4">
-                    <Accordion
-                      type="single"
-                      collapsible
-                      className="space-y-3"
-                      value={expandedScenarioId}
-                      onValueChange={setExpandedScenarioId}
-                    >
-                      {scenarios.map((scenario) => (
+            {/* Platform Badge */}
+            {testRun?.platform && (
+              <Card className="bg-white rounded-lg">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2">
+                    {testRun.platform.toLowerCase() === "ios" || testRun.platform.toLowerCase() === "android" ? (
+                      <Smartphone className="h-4 w-4 text-primary" />
+                    ) : (
+                      <Globe className="h-4 w-4 text-primary" />
+                    )}
+                    <span className="font-medium capitalize">{testRun.platform}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Scenarios Section */}
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-xl font-semibold mb-4">Test Scenarios</h3>
+              </div>
+              {/* Two Column Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Left Column - Scenarios List */}
+                <div className="space-y-4">
+                    {scenarios.length === 0 ? (
+                      <Card>
+                        <CardContent className="p-6 text-center">
+                          <p className="text-muted-foreground">No scenarios found for this test run</p>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <Accordion
+                        type="single"
+                        collapsible
+                        className="space-y-3"
+                        value={expandedScenarioId}
+                        onValueChange={setExpandedScenarioId}
+                      >
+                        {scenarios.map((scenario) => (
                         <AccordionItem
                           key={scenario.id}
                           value={`scenario-${scenario.id}`}
@@ -556,8 +597,9 @@ export const TestRunDetailPage: React.FC = () => {
                             )}
                           </AccordionContent>
                         </AccordionItem>
-                      ))}
-                    </Accordion>
+                        ))}
+                      </Accordion>
+                    )}
                   </div>
 
                   {/* Right Column - Details */}
@@ -867,8 +909,7 @@ export const TestRunDetailPage: React.FC = () => {
                     )}
                   </div>
                 </div>
-              </TabsContent>
-            </Tabs>
+            </div>
 
             {/* Share Dialog */}
             <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>

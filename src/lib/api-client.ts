@@ -922,6 +922,7 @@ export interface TestRunResponse {
   failed_scenarios: number;
   started_at: string;
   completed_at: string | null;
+  platform?: string;
 }
 
 export interface TestRunCreate {

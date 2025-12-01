@@ -363,9 +363,17 @@ export const TestSuiteRunsPage: React.FC = () => {
   const handleAddScenario = async () => {
     if (!newScenario.trim()) return;
     const newId = crypto.randomUUID();
+    setScenarios([...scenarios, {
+      id: newId,
+      name: newScenario,
+      status: "pending",
+      hasRun: false,
+      steps: [],
+    }]);
     setNewScenario("");
     setIsAddDialogOpen(false);
-    await executeScenario(newId, newScenario);
+    // Run all scenarios when adding a new one
+    await handleRunAll();
   };
 
   const handleSaveAsDraft = () => {
@@ -382,17 +390,6 @@ export const TestSuiteRunsPage: React.FC = () => {
     setIsAddDialogOpen(false);
   };
 
-  const handleRunFromDraft = async (scenarioId: string) => {
-    const scenario = scenarios.find(s => s.id === scenarioId);
-    if (!scenario) return;
-    await executeScenario(scenarioId, scenario.name);
-  };
-
-  const handleRerunScenario = async (scenarioId: string) => {
-    const scenario = scenarios.find(s => s.id === scenarioId);
-    if (!scenario) return;
-    await executeScenario(scenarioId, scenario.name);
-  };
 
   const handleEditScenario = () => {
     if (!editingScenario || !editingScenario.name.trim()) return;
@@ -414,7 +411,8 @@ export const TestSuiteRunsPage: React.FC = () => {
     ));
     setIsEditDialogOpen(false);
     setEditingScenario(null);
-    await executeScenario(scenarioId, scenarioName);
+    // Run all scenarios when editing and clicking Run Now
+    await handleRunAll();
   };
 
   // Map API response to UI state
@@ -1142,43 +1140,37 @@ export const TestSuiteRunsPage: React.FC = () => {
                             {scenario.hasRun ? (
                               <TooltipProvider>
                                 <Tooltip>
-                                  <TooltipTrigger asChild>
+                                  <TooltipTrigger className="inline-flex">
                                     <Button
                                       size="sm"
                                       variant="ghost"
-                                      className="h-7 w-7 p-0"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleRerunScenario(scenario.id);
-                                      }}
+                                      className="h-7 w-7 p-0 opacity-50 cursor-not-allowed"
+                                      disabled
                                     >
                                       <RotateCcw className="h-3 w-3" />
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    <p>Rerun Scenario</p>
+                                    <p>Coming Soon</p>
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
                             ) : (
                               <TooltipProvider>
                                 <Tooltip>
-                                  <TooltipTrigger asChild>
+                                  <TooltipTrigger className="inline-flex">
                                     <Button
                                       size="sm"
                                       variant="ghost"
-                                      className="h-7 px-2"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleRunFromDraft(scenario.id);
-                                      }}
+                                      className="h-7 px-2 opacity-50 cursor-not-allowed"
+                                      disabled
                                     >
                                       <Play className="h-3 w-3 mr-1" />
                                       Run
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>
-                                    <p>Run Scenario</p>
+                                    <p>Coming Soon</p>
                                   </TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
@@ -1252,17 +1244,24 @@ export const TestSuiteRunsPage: React.FC = () => {
                             <p className="text-sm text-muted-foreground mb-3">
                               This scenario hasn't been executed yet
                             </p>
-                            <Button
-                              size="sm"
-                              variant="default"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRunFromDraft(scenario.id);
-                              }}
-                            >
-                              <Play className="h-4 w-4 mr-2" />
-                              Run Scenario
-                            </Button>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    disabled
+                                    className="opacity-50 cursor-not-allowed"
+                                  >
+                                    <Play className="h-4 w-4 mr-2" />
+                                    Run Scenario
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Coming Soon</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </div>
                         )}
                       </AccordionContent>

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
-import { CheckCircle, XCircle, Loader2, Filter, ChevronLeft, ChevronRight } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Filter, ChevronLeft, ChevronRight, Globe, Smartphone } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useProject } from "../../contexts/ProjectContext";
 import { useNavigate } from "react-router-dom";
@@ -33,6 +33,7 @@ interface TestRun {
   failed_scenarios: number;
   started_at: string;
   completed_at: string | null;
+  platform?: string;
   test_suites: {
     id: string;
     name: string;
@@ -186,6 +187,7 @@ export const TestRunsPage: React.FC = () => {
           failed_scenarios: run.failed_scenarios,
           started_at: run.started_at,
           completed_at: run.completed_at,
+          platform: run.platform,
           test_suites: suite ? {
             id: suite.id.toString(),
             name: suite.name,
@@ -266,6 +268,42 @@ export const TestRunsPage: React.FC = () => {
     };
     const config = variants[status] || variants.completed;
     return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  const getPlatformBadge = (platform?: string) => {
+    if (!platform) {
+      // Default to web if platform is not specified
+      return (
+        <Badge variant="outline" className="flex items-center gap-1">
+          <Globe className="h-3 w-3" />
+          Web
+        </Badge>
+      );
+    }
+    
+    const platformLower = platform.toLowerCase();
+    if (platformLower === "ios") {
+      return (
+        <Badge variant="outline" className="flex items-center gap-1">
+          <Smartphone className="h-3 w-3" />
+          iOS
+        </Badge>
+      );
+    } else if (platformLower === "android") {
+      return (
+        <Badge variant="outline" className="flex items-center gap-1">
+          <Smartphone className="h-3 w-3" />
+          Android
+        </Badge>
+      );
+    } else {
+      return (
+        <Badge variant="outline" className="flex items-center gap-1">
+          <Globe className="h-3 w-3" />
+          Web
+        </Badge>
+      );
+    }
   };
 
   const clearFilters = () => {
@@ -397,6 +435,7 @@ export const TestRunsPage: React.FC = () => {
                               {run.test_suites?.name || "Unknown Suite"}
                             </h3>
                             {getStatusBadge(run.status)}
+                            {getPlatformBadge(run.platform)}
                           </div>
                           
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">

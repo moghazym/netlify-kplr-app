@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,23 +12,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ChevronLeft, Sparkles, Upload, X, FileText, Image as ImageIcon, PenTool } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { 
   createTestSuite, 
   getProjects,
+  createScenario,
+  uploadTestSuiteAttachments,
   type TestSuiteCreate,
   type ProjectResponse 
 } from "@/lib/api-client";
+import { GenerateScenariosDialog } from "@/components/GenerateScenariosDialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
 export default function CreateTestSuitePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [projects, setProjects] = useState<ProjectResponse[]>([]);
-  const [loadingProjects, setLoadingProjects] = useState(true);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [showScenariosDialog, setShowScenariosDialog] = useState(false);
 
   const [formData, setFormData] = useState<TestSuiteCreate>({
     name: "",
@@ -53,34 +58,77 @@ export default function CreateTestSuitePage() {
 
   const fetchProjects = async () => {
     try {
-      setLoadingProjects(true);
       const projectsData = await getProjects();
       setProjects(projectsData);
       
       // Auto-select first project if available
-      if (projectsData.length > 0) {
+      if (projectsData.length > 0 && formData.project_id === 0) {
         setFormData(prev => ({ ...prev, project_id: projectsData[0].id }));
       }
     } catch (error) {
       console.error('Error fetching projects:', error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to load projects/workspaces",
-        variant: "destructive",
-      });
-    } finally {
-      setLoadingProjects(false);
+      // Silently fail - project will need to be set elsewhere
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
     
-    if (!formData.name.trim()) {
+    // Validate file types
+    const allowedTypes = [
+      'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+      'application/pdf', 
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'text/plain',
+      'text/csv'
+    ];
+    
+    const validFiles = files.filter(file => {
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          title: "Invalid file type",
+          description: `${file.name} is not a supported file type`,
+          variant: "destructive"
+        });
+        return false;
+      }
+      return true;
+    });
+    
+    setAttachments(prev => [...prev, ...validFiles]);
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const getFileIcon = (fileType: string) => {
+    if (fileType.startsWith('image/')) return <ImageIcon className="h-4 w-4" />;
+    return <FileText className="h-4 w-4" />;
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const handleSaveDraft = async () => {
+    if (!user || !formData.name.trim()) {
       toast({
-        title: "Error",
-        description: "Test suite name is required",
-        variant: "destructive",
+        title: "Missing information",
+        description: "Please provide at least a test suite name",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!formData.application_url?.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please provide an application URL",
+        variant: "destructive"
       });
       return;
     }
@@ -94,9 +142,10 @@ export default function CreateTestSuitePage() {
       return;
     }
 
-    setLoading(true);
     try {
-      // Prepare the data according to TestSuiteCreate schema
+      setUploadingFiles(true);
+      
+      // Create test suite
       const createData: TestSuiteCreate = {
         name: formData.name.trim(),
         project_id: formData.project_id,
@@ -114,328 +163,639 @@ export default function CreateTestSuitePage() {
 
       const newSuite = await createTestSuite(createData);
 
+      // Upload attachments if any
+      if (attachments.length > 0 && newSuite) {
+        try {
+          await uploadTestSuiteAttachments(newSuite.id, attachments);
+        } catch (error) {
+          console.error('Error uploading attachments:', error);
+          // Don't fail the whole operation if attachments fail
+        }
+      }
+
       toast({
-        title: "Success",
-        description: "Test suite created successfully",
+        title: "Draft saved",
+        description: "Test suite saved as draft successfully"
       });
 
-      // Navigate to the test suite runs page
       navigate(`/suite/${newSuite.id}/runs`);
     } catch (error) {
-      console.error('Error creating test suite:', error);
+      console.error('Save error:', error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create test suite",
-        variant: "destructive",
+        description: error instanceof Error ? error.message : "Failed to save test suite",
+        variant: "destructive"
       });
     } finally {
-      setLoading(false);
+      setUploadingFiles(false);
     }
   };
 
-  if (loadingProjects) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const handleGenerate = () => {
+    if (!formData.name.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please provide a test suite name",
+        variant: "destructive"
+      });
+      return;
+    }
 
-  if (projects.length === 0) {
-    return (
-      <div className="space-y-6">
-        <Button
-          variant="ghost"
-          onClick={() => navigate("/test-suites")}
-          className="mb-4"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Test Suites
-        </Button>
-        <Card>
-          <CardHeader>
-            <CardTitle>No Projects Available</CardTitle>
-            <CardDescription>
-              You need to create a project/workspace before creating a test suite.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
-              Please create a project/workspace first from the sidebar, then try again.
-            </p>
-            <Button onClick={() => navigate("/test-suites")}>
-              Go Back
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+    if (!formData.application_url?.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please provide an application URL",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    setShowScenariosDialog(true);
+  };
+
+  const handleApplyScenarios = async (scenarios: Array<{ id: string; name: string; description: string }>) => {
+    if (!user) return;
+
+    if (!formData.project_id || formData.project_id === 0) {
+      toast({
+        title: "Error",
+        description: "Please select a project/workspace",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setUploadingFiles(true);
+      
+      // Create test suite
+      const createData: TestSuiteCreate = {
+        name: formData.name.trim(),
+        project_id: formData.project_id,
+        description: formData.description?.trim() || null,
+        application_url: formData.application_url?.trim() || null,
+        ai_testing_instructions: formData.ai_testing_instructions?.trim() || null,
+        resolution: formData.resolution || "Desktop Standard",
+        creation_mode: formData.creation_mode || "manual",
+        preconditions_enabled: formData.preconditions_enabled ?? false,
+        preconditions: formData.preconditions || null,
+        has_persistent_context: formData.has_persistent_context ?? false,
+        exploration_enabled: formData.exploration_enabled ?? false,
+        exploration_step_limit: formData.exploration_step_limit || null,
+      };
+
+      const newSuite = await createTestSuite(createData);
+
+      // Upload attachments if any
+      if (attachments.length > 0 && newSuite) {
+        try {
+          await uploadTestSuiteAttachments(newSuite.id, attachments);
+        } catch (error) {
+          console.error('Error uploading attachments:', error);
+          // Don't fail the whole operation if attachments fail
+        }
+      }
+
+      // Insert scenarios
+      if (scenarios.length > 0 && newSuite) {
+        for (const scenario of scenarios) {
+          try {
+            await createScenario({
+              test_suite_id: newSuite.id,
+              name: scenario.name,
+              description: scenario.description,
+            });
+          } catch (error) {
+            console.error('Error creating scenario:', error);
+            // Continue with other scenarios even if one fails
+          }
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: `Test suite created with ${scenarios.length} scenarios`
+      });
+
+      navigate(`/suite/${newSuite.id}/runs`);
+    } catch (error) {
+      console.error('Save error:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save test suite",
+        variant: "destructive"
+      });
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
+
+  const handleCreateTestSuite = async () => {
+    if (!user || !formData.name.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please provide at least a test suite name",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!formData.application_url?.trim()) {
+      toast({
+        title: "Missing information",
+        description: "Please provide an application URL",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!formData.project_id || formData.project_id === 0) {
+      toast({
+        title: "Error",
+        description: "Please select a project/workspace",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setUploadingFiles(true);
+      
+      // Create test suite
+      const createData: TestSuiteCreate = {
+        name: formData.name.trim(),
+        project_id: formData.project_id,
+        description: formData.description?.trim() || null,
+        application_url: formData.application_url?.trim() || null,
+        ai_testing_instructions: null, // Manual mode doesn't use AI instructions
+        resolution: formData.resolution || "Desktop Standard",
+        creation_mode: "manual",
+        preconditions_enabled: formData.preconditions_enabled ?? false,
+        preconditions: formData.preconditions || null,
+        has_persistent_context: formData.has_persistent_context ?? false,
+        exploration_enabled: false, // Manual mode doesn't use exploration
+        exploration_step_limit: null,
+      };
+
+      const newSuite = await createTestSuite(createData);
+
+      toast({
+        title: "Success",
+        description: "Test suite created successfully"
+      });
+
+      navigate(`/suite/${newSuite.id}/runs`);
+    } catch (error) {
+      console.error('Save error:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create test suite",
+        variant: "destructive"
+      });
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => navigate("/test-suites")}
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
-        </Button>
-        <div>
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Create Test Suite</h2>
-          <p className="text-muted-foreground mt-1">
-            Create a new test suite to organize your test scenarios
-          </p>
+    <div className="min-h-screen bg-background">
+      <div className="container mx-auto px-6 py-8">
+        <div className="flex items-center gap-4 mb-8">
+          <Link to="/test-suites">
+            <Button variant="ghost" size="sm" className="gap-2">
+              <ChevronLeft className="w-4 h-4" />
+              Back
+            </Button>
+          </Link>
+          <div>
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Create Test Suite</h2>
+            <p className="text-muted-foreground mt-1">
+              Create a new test suite to organize your test scenarios
+            </p>
+          </div>
         </div>
+
+        <Card className="p-6">
+          <div className="space-y-6">
+            <Tabs 
+              value={formData.creation_mode || "manual"} 
+              onValueChange={(value: "manual" | "ai") => 
+                setFormData({ ...formData, creation_mode: value })
+              }
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="manual" className="gap-2">
+                  <PenTool className="w-4 h-4" />
+                  Manual Creation
+                </TabsTrigger>
+                <TabsTrigger value="ai" className="gap-2">
+                  <Sparkles className="w-4 h-4" />
+                  AI Generated
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="manual" className="space-y-6 mt-6">
+
+                <div>
+                  <Label htmlFor="suite-name">
+                    Test Suite Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input 
+                    id="suite-name" 
+                    placeholder="e.g., User Authentication Flow"
+                    className="mt-2"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="url">
+                    Application URL <span className="text-destructive">*</span>
+                  </Label>
+                  <Input 
+                    id="url" 
+                    type="url"
+                    placeholder="https://example.com"
+                    className="mt-2"
+                    value={formData.application_url || ""}
+                    onChange={(e) => setFormData({ ...formData, application_url: e.target.value || null })}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    The URL of the application or feature you want to test
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="description">Test Description (Optional)</Label>
+                  <Textarea
+                    id="description"
+                    placeholder="Describe what you want to test. For example: Test the login flow including email validation, password requirements, forgot password, and session management..."
+                    className="mt-2 min-h-[150px]"
+                    value={formData.description || ""}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value || null })}
+                  />
+                </div>
+
+                <div className="space-y-4 pt-4 border-t">
+                  <div>
+                    <Label htmlFor="resolution">Screen Resolution</Label>
+                    <Select
+                      value={formData.resolution || "Desktop Standard"}
+                      onValueChange={(value) => 
+                        setFormData({ ...formData, resolution: value })
+                      }
+                    >
+                      <SelectTrigger className="mt-2">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Desktop Standard">Desktop Standard (1920x1080)</SelectItem>
+                        <SelectItem value="Desktop Large">Desktop Large (2560x1440)</SelectItem>
+                        <SelectItem value="Laptop">Laptop (1366x768)</SelectItem>
+                        <SelectItem value="Tablet">Tablet (768x1024)</SelectItem>
+                        <SelectItem value="Mobile">Mobile (375x667)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="preconditions_enabled_manual"
+                      checked={formData.preconditions_enabled || false}
+                      onChange={(e) => 
+                        setFormData({ ...formData, preconditions_enabled: e.target.checked })
+                      }
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <Label htmlFor="preconditions_enabled_manual" className="cursor-pointer">
+                      Enable Preconditions
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground ml-6">
+                    Set up preconditions that must be met before test execution
+                  </p>
+                  {formData.preconditions_enabled && (
+                    <div className="space-y-2 ml-6">
+                      <Label htmlFor="preconditions_manual">Preconditions</Label>
+                      <Textarea
+                        id="preconditions_manual"
+                        placeholder="Describe the preconditions that must be met before test execution..."
+                        className="mt-2 min-h-[100px]"
+                        value={typeof formData.preconditions === 'string' ? formData.preconditions : ''}
+                        onChange={(e) => 
+                          setFormData({ 
+                            ...formData, 
+                            preconditions: e.target.value || null 
+                          })
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Specify any setup steps or conditions required before running tests
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="has_persistent_context_manual"
+                      checked={formData.has_persistent_context || false}
+                      onChange={(e) => 
+                        setFormData({ ...formData, has_persistent_context: e.target.checked })
+                      }
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <Label htmlFor="has_persistent_context_manual" className="cursor-pointer">
+                      Persistent Context
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground ml-6">
+                    Maintain browser context across test scenarios
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <Button 
+                    className="gap-2 flex-1"
+                    onClick={handleCreateTestSuite}
+                    disabled={uploadingFiles || !formData.name.trim() || !formData.application_url?.trim()}
+                  >
+                    {uploadingFiles ? "Creating..." : "Create Test Suite"}
+                  </Button>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="ai" className="space-y-6 mt-6">
+                <div>
+                  <Label htmlFor="suite-name-ai">
+                    Test Suite Name <span className="text-destructive">*</span>
+                  </Label>
+                  <Input 
+                    id="suite-name-ai" 
+                    placeholder="e.g., User Authentication Flow"
+                    className="mt-2"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="url-ai">
+                    Application URL <span className="text-destructive">*</span>
+                  </Label>
+                  <Input 
+                    id="url-ai" 
+                    type="url"
+                    placeholder="https://example.com"
+                    className="mt-2"
+                    value={formData.application_url || ""}
+                    onChange={(e) => setFormData({ ...formData, application_url: e.target.value || null })}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    The URL of the application or feature you want to test
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="description-ai">Test Description (Optional)</Label>
+                  <Textarea
+                    id="description-ai"
+                    placeholder="Describe what you want to test. For example: Test the login flow including email validation, password requirements, forgot password, and session management..."
+                    className="mt-2 min-h-[150px]"
+                    value={formData.description || ""}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value || null })}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="ai-instructions">AI Testing Instructions (Optional)</Label>
+                  <Textarea
+                    id="ai-instructions"
+                    placeholder="Provide specific instructions for the AI tester. For example: Focus on edge cases, test with invalid inputs, verify error messages are user-friendly..."
+                    className="mt-2 min-h-[100px]"
+                    value={formData.ai_testing_instructions || ""}
+                    onChange={(e) => setFormData({ ...formData, ai_testing_instructions: e.target.value || null })}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Additional context or specific testing requirements for the AI
+                  </p>
+                </div>
+
+                <div>
+                  <Label>Attachments (Optional)</Label>
+                  <p className="text-xs text-muted-foreground mt-1 mb-2">
+                    Upload images, documents, or previous test cases to provide context
+                  </p>
+                  
+                  <input
+                    type="file"
+                    id="file-upload"
+                    className="hidden"
+                    multiple
+                    accept="image/*,.pdf,.doc,.docx,.txt,.csv"
+                    onChange={handleFileSelect}
+                  />
+                  
+                  <label
+                    htmlFor="file-upload"
+                    className="block border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
+                  >
+                    <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                    <p className="text-sm text-muted-foreground">
+                      Click to upload files
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Supports: Images (JPG, PNG, GIF, WEBP), PDF, DOC, DOCX, TXT, CSV
+                    </p>
+                  </label>
+
+                  {attachments.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      {attachments.map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-3 bg-muted rounded-lg"
+                        >
+                          <div className="flex items-center gap-3">
+                            {getFileIcon(file.type)}
+                            <div>
+                              <p className="text-sm font-medium">{file.name}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {formatFileSize(file.size)}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeAttachment(index)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4 pt-4 border-t">
+                  <div>
+                    <Label htmlFor="resolution">Screen Resolution</Label>
+                    <Select
+                      value={formData.resolution || "Desktop Standard"}
+                      onValueChange={(value) => 
+                        setFormData({ ...formData, resolution: value })
+                      }
+                    >
+                      <SelectTrigger className="mt-2">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Desktop Standard">Desktop Standard (1920x1080)</SelectItem>
+                        <SelectItem value="Desktop Large">Desktop Large (2560x1440)</SelectItem>
+                        <SelectItem value="Laptop">Laptop (1366x768)</SelectItem>
+                        <SelectItem value="Tablet">Tablet (768x1024)</SelectItem>
+                        <SelectItem value="Mobile">Mobile (375x667)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="preconditions_enabled"
+                      checked={formData.preconditions_enabled || false}
+                      onChange={(e) => 
+                        setFormData({ ...formData, preconditions_enabled: e.target.checked })
+                      }
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <Label htmlFor="preconditions_enabled" className="cursor-pointer">
+                      Enable Preconditions
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground ml-6">
+                    Set up preconditions that must be met before test execution
+                  </p>
+                  {formData.preconditions_enabled && (
+                    <div className="space-y-2 ml-6">
+                      <Label htmlFor="preconditions">Preconditions</Label>
+                      <Textarea
+                        id="preconditions"
+                        placeholder="Describe the preconditions that must be met before test execution..."
+                        className="mt-2 min-h-[100px]"
+                        value={typeof formData.preconditions === 'string' ? formData.preconditions : ''}
+                        onChange={(e) => 
+                          setFormData({ 
+                            ...formData, 
+                            preconditions: e.target.value || null 
+                          })
+                        }
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Specify any setup steps or conditions required before running tests
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="has_persistent_context"
+                      checked={formData.has_persistent_context || false}
+                      onChange={(e) => 
+                        setFormData({ ...formData, has_persistent_context: e.target.checked })
+                      }
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <Label htmlFor="has_persistent_context" className="cursor-pointer">
+                      Persistent Context
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground ml-6">
+                    Maintain browser context across test scenarios
+                  </p>
+
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="exploration_enabled"
+                      checked={formData.exploration_enabled || false}
+                      onChange={(e) => 
+                        setFormData({ ...formData, exploration_enabled: e.target.checked })
+                      }
+                      className="h-4 w-4 rounded border-gray-300"
+                    />
+                    <Label htmlFor="exploration_enabled" className="cursor-pointer">
+                      Enable Exploration
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground ml-6">
+                    Allow AI to explore the application beyond defined scenarios
+                  </p>
+
+                  {formData.exploration_enabled && (
+                    <div className="space-y-2 ml-6">
+                      <Label htmlFor="exploration_step_limit">Exploration Step Limit</Label>
+                      <Input
+                        id="exploration_step_limit"
+                        type="number"
+                        min="1"
+                        value={formData.exploration_step_limit || ""}
+                        onChange={(e) => 
+                          setFormData({ 
+                            ...formData, 
+                            exploration_step_limit: e.target.value ? parseInt(e.target.value, 10) : null 
+                          })
+                        }
+                        placeholder="Maximum exploration steps"
+                        className="mt-2"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Maximum number of steps the AI can take during exploration
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <Button 
+                    className="gap-2 flex-1"
+                    onClick={handleGenerate}
+                    disabled={uploadingFiles || !formData.name.trim() || !formData.application_url?.trim()}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Generate Scenarios
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={handleSaveDraft}
+                    disabled={uploadingFiles || !formData.name.trim() || !formData.application_url?.trim()}
+                  >
+                    {uploadingFiles ? "Saving..." : "Save as Draft"}
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </Card>
+
+        <GenerateScenariosDialog
+          open={showScenariosDialog}
+          onOpenChange={setShowScenariosDialog}
+          onApply={handleApplyScenarios}
+          suiteName={formData.name}
+          description={formData.description || ""}
+          url={formData.application_url}
+          aiInstructions={formData.ai_testing_instructions}
+        />
       </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Basic Information</CardTitle>
-            <CardDescription>
-              Provide basic details about your test suite
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="project_id">Project / Workspace *</Label>
-              <Select
-                value={formData.project_id?.toString() || ""}
-                onValueChange={(value) => 
-                  setFormData({ ...formData, project_id: parseInt(value, 10) })
-                }
-                required
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a project/workspace" />
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id.toString()}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="name">Test Suite Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                placeholder="e.g., E-commerce Regression Tests"
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description || ""}
-                onChange={(e) => 
-                  setFormData({ ...formData, description: e.target.value || null })
-                }
-                placeholder="Describe what this test suite covers..."
-                rows={3}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="application_url">Application URL</Label>
-              <Input
-                id="application_url"
-                type="url"
-                value={formData.application_url || ""}
-                onChange={(e) => 
-                  setFormData({ ...formData, application_url: e.target.value || null })
-                }
-                placeholder="https://example.com"
-              />
-              <p className="text-xs text-muted-foreground">
-                The base URL of the application to test
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>AI Testing Configuration</CardTitle>
-            <CardDescription>
-              Configure AI-powered testing options
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="ai_testing_instructions">AI Testing Instructions</Label>
-              <Textarea
-                id="ai_testing_instructions"
-                value={formData.ai_testing_instructions || ""}
-                onChange={(e) => 
-                  setFormData({ ...formData, ai_testing_instructions: e.target.value || null })
-                }
-                placeholder="Provide specific instructions for AI-driven test execution..."
-                rows={4}
-              />
-              <p className="text-xs text-muted-foreground">
-                Instructions that guide the AI agent during test execution
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="resolution">Screen Resolution</Label>
-              <Select
-                value={formData.resolution || "Desktop Standard"}
-                onValueChange={(value) => 
-                  setFormData({ ...formData, resolution: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Desktop Standard">Desktop Standard (1920x1080)</SelectItem>
-                  <SelectItem value="Desktop Large">Desktop Large (2560x1440)</SelectItem>
-                  <SelectItem value="Laptop">Laptop (1366x768)</SelectItem>
-                  <SelectItem value="Tablet">Tablet (768x1024)</SelectItem>
-                  <SelectItem value="Mobile">Mobile (375x667)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="creation_mode">Creation Mode</Label>
-              <Select
-                value={formData.creation_mode || "manual"}
-                onValueChange={(value: "manual" | "ai") => 
-                  setFormData({ ...formData, creation_mode: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="manual">Manual</SelectItem>
-                  <SelectItem value="ai">AI Generated</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Advanced Options</CardTitle>
-            <CardDescription>
-              Configure advanced testing features
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="preconditions_enabled"
-                checked={formData.preconditions_enabled || false}
-                onChange={(e) => 
-                  setFormData({ ...formData, preconditions_enabled: e.target.checked })
-                }
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              <Label htmlFor="preconditions_enabled" className="cursor-pointer">
-                Enable Preconditions
-              </Label>
-            </div>
-            <p className="text-xs text-muted-foreground ml-6">
-              Set up preconditions that must be met before test execution
-            </p>
-
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="has_persistent_context"
-                checked={formData.has_persistent_context || false}
-                onChange={(e) => 
-                  setFormData({ ...formData, has_persistent_context: e.target.checked })
-                }
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              <Label htmlFor="has_persistent_context" className="cursor-pointer">
-                Persistent Context
-              </Label>
-            </div>
-            <p className="text-xs text-muted-foreground ml-6">
-              Maintain browser context across test scenarios
-            </p>
-
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="exploration_enabled"
-                checked={formData.exploration_enabled || false}
-                onChange={(e) => 
-                  setFormData({ ...formData, exploration_enabled: e.target.checked })
-                }
-                className="h-4 w-4 rounded border-gray-300"
-              />
-              <Label htmlFor="exploration_enabled" className="cursor-pointer">
-                Enable Exploration
-              </Label>
-            </div>
-            <p className="text-xs text-muted-foreground ml-6">
-              Allow AI to explore the application beyond defined scenarios
-            </p>
-
-            {formData.exploration_enabled && (
-              <div className="space-y-2 ml-6">
-                <Label htmlFor="exploration_step_limit">Exploration Step Limit</Label>
-                <Input
-                  id="exploration_step_limit"
-                  type="number"
-                  min="1"
-                  value={formData.exploration_step_limit || ""}
-                  onChange={(e) => 
-                    setFormData({ 
-                      ...formData, 
-                      exploration_step_limit: e.target.value ? parseInt(e.target.value, 10) : null 
-                    })
-                  }
-                  placeholder="Maximum exploration steps"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Maximum number of steps the AI can take during exploration
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-end gap-4">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => navigate("/test-suites")}
-            disabled={loading}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Creating...
-              </>
-            ) : (
-              "Create Test Suite"
-            )}
-          </Button>
-        </div>
-      </form>
     </div>
   );
 }
