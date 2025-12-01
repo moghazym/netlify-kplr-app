@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { getUserFromStorage, saveUserToStorage, clearUserFromStorage, checkUrlForAuth } from '../lib/auth-storage';
 import { apiGet } from '../lib/api-client';
+import { shouldUseMockApi } from '../lib/mock-api';
 
 interface User {
   id: string;
@@ -62,6 +63,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     let isMounted = true;
     const initAuth = async () => {
+      // In dev mode with mock API, automatically set a mock user
+      if (shouldUseMockApi()) {
+        logAuth('Using mock API - setting mock user for development');
+        const mockUser: User = {
+          id: '1',
+          name: 'Dev User',
+          email: 'dev@example.com',
+          picture: undefined,
+        };
+        if (isMounted) {
+          saveUserToStorage(mockUser);
+          setUser(mockUser);
+          setLoading(false);
+          logAuth('Mock user set for development', mockUser);
+        }
+        return;
+      }
+
       try {
         // Check if we have a token before making the API call
         const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');

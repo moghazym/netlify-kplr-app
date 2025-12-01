@@ -126,7 +126,7 @@ export default function SchedulerPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Scheduler</h2>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Scheduler</h2>
           <p className="text-muted-foreground mt-1">
             Automate your test suite executions with scheduled runs
           </p>

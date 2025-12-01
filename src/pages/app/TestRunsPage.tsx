@@ -295,7 +295,7 @@ export const TestRunsPage: React.FC = () => {
   return (
     <div className="space-y-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Test Runs</h2>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Test Runs</h2>
           <p className="text-muted-foreground mt-1">View and analyze all test execution history</p>
         </div>
 
@@ -388,7 +388,7 @@ export const TestRunsPage: React.FC = () => {
                         "border border-border rounded-lg p-4 hover:bg-accent/50 cursor-pointer transition-colors",
                         run.status === "running" && "bg-orange-50 border-orange-200"
                       )}
-                      onClick={() => navigate(`/suite/${run.suite_id}/runs`)}
+                      onClick={() => navigate(`/test-runs/${run.id}`)}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 space-y-2">

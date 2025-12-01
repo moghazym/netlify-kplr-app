@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { Home, FileText, PlayCircle, Settings, ChevronDown, Key, LogOut, User, Calendar, Plus, Trash2, CreditCard } from "lucide-react";
-import logoImage from "@/assets/logo-D_k9ADKT.png";
+import { Home, FileText, PlayCircle, Settings, ChevronDown, Key, LogOut, User, Calendar, Plus, Trash2, CreditCard, Smartphone } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProject } from "@/contexts/ProjectContext";
@@ -44,6 +43,7 @@ const menuItems = [
   { title: "Test Suites", url: "/test-suites", icon: FileText },
   { title: "Test Runs", url: "/test-runs", icon: PlayCircle },
   { title: "Scheduler", url: "/scheduler", icon: Calendar },
+  { title: "App Registry", url: "/app-registry", icon: Smartphone },
   { title: "Usage & Billing", url: "/pricing", icon: CreditCard },
   { title: "Secrets & Variables", url: "/secrets", icon: Key },
   { title: "Integrations", url: "/integrations", icon: Settings },
@@ -124,15 +124,7 @@ export function AppSidebar() {
   return (
     <>
       <Sidebar collapsible="icon">
-        <SidebarHeader className="border-b border-sidebar-border">
-          {!collapsed && (
-            <div className="flex items-center gap-2 px-2">
-              <img src={logoImage} alt="Kplr" className="w-12 h-12 rounded" />
-            </div>
-          )}
-          {collapsed && (
-            <img src={logoImage} alt="Kplr" className="w-12 h-12 rounded mx-auto" />
-          )}
+        <SidebarHeader>
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>

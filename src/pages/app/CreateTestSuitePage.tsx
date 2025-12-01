@@ -184,7 +184,7 @@ export default function CreateTestSuitePage() {
           Back
         </Button>
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Create Test Suite</h2>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Create Test Suite</h2>
           <p className="text-muted-foreground mt-1">
             Create a new test suite to organize your test scenarios
           </p>

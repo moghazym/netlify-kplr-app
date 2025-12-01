@@ -50,7 +50,7 @@ export const TestSuitesPage: React.FC = () => {
     return (
       <div className="space-y-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Test Suites</h2>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Test Suites</h2>
           <p className="text-muted-foreground mt-1">Manage and organize your test scenarios</p>
         </div>
         <div className="flex items-center justify-center py-12">
@@ -64,7 +64,7 @@ export const TestSuitesPage: React.FC = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Test Suites</h2>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Test Suites</h2>
           <p className="text-muted-foreground mt-1">Manage and organize your test scenarios</p>
         </div>
         <Button onClick={() => navigate("/create-suite")} className="bg-orange-500 hover:bg-orange-600 text-white">

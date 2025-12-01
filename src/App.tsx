@@ -12,11 +12,13 @@ import { DashboardPage } from "./pages/app/DashboardPage";
 import { TestSuitesPage } from "./pages/app/TestSuitesPage";
 import { TestSuiteRunsPage } from "./pages/app/TestSuiteRunsPage";
 import { TestRunsPage } from "./pages/app/TestRunsPage";
+import { TestRunDetailPage } from "./pages/app/TestRunDetailPage";
 import SchedulerPage from "./pages/app/SchedulerPage";
 import PricingPage from "./pages/app/PricingPage";
 import SecretsPage from "./pages/app/SecretsPage";
 import CreateTestSuitePage from "./pages/app/CreateTestSuitePage";
 import { AuthCallbackPage } from "./pages/app/AuthCallbackPage";
+import AppRegistryPage from "./pages/app/AppRegistryPage";
 import { Toaster } from "./components/ui/toaster";
 import "./App.css";
 
@@ -41,9 +43,11 @@ function App() {
             <Route path="/create-suite" element={<CreateTestSuitePage />} />
             <Route path="/suite/:suiteId/runs" element={<TestSuiteRunsPage />} />
             <Route path="/test-runs" element={<TestRunsPage />} />
+            <Route path="/test-runs/:runId" element={<TestRunDetailPage />} />
             <Route path="/scheduler" element={<SchedulerPage />} />
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/secrets" element={<SecretsPage />} />
+            <Route path="/app-registry" element={<AppRegistryPage />} />
             <Route path="/integrations" element={<div className="p-6">Integrations Page - Coming Soon</div>} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>

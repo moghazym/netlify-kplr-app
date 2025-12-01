@@ -190,7 +190,7 @@ export default function SecretsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Secrets & Variables</h2>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Secrets & Variables</h2>
           <p className="text-muted-foreground mt-1">
             Manage credentials and variables for your test scenarios
           </p>

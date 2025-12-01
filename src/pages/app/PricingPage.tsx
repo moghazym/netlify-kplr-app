@@ -216,7 +216,7 @@ export default function PricingPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Usage & Billing</h2>
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Usage & Billing</h2>
           <p className="text-muted-foreground mt-1">Track your test execution usage and costs</p>
         </div>
         <div className="flex items-center gap-3">

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import logoImage from "../../assets/logo-D_k9ADKT.png";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { 
@@ -271,11 +270,9 @@ export const DashboardPage: React.FC = () => {
     { 
       label: "Failed Scenarios", 
       value: stats.failedScenarios.toString(), 
-      subtitle: stats.failedScenarios > 0 ? "Click to view" : "No failures",
+      subtitle: stats.failedScenarios > 0 ? `${stats.failedScenarios} failed` : "No failures",
       icon: XCircle, 
-      color: "hsl(0, 84%, 60%)",
-      clickable: stats.failedScenarios > 0,
-      onClick: () => navigate("/failed-scenarios")
+      color: "hsl(0, 84%, 60%)"
     },
     { 
       label: "Success Rate", 
@@ -288,7 +285,7 @@ export const DashboardPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex-1 overflow-y-auto bg-gray-50 flex items-center justify-center">
+      <div className="flex-1 overflow-y-auto flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -296,7 +293,7 @@ export const DashboardPage: React.FC = () => {
 
   if (!selectedProject) {
     return (
-      <div className="flex-1 overflow-y-auto bg-gray-50 flex items-center justify-center">
+      <div className="flex-1 overflow-y-auto flex items-center justify-center">
         <div className="text-center">
           <p className="text-lg font-medium text-muted-foreground mb-2">No project selected</p>
           <p className="text-sm text-muted-foreground">Please select a project from the sidebar to view dashboard data.</p>
@@ -306,11 +303,11 @@ export const DashboardPage: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50">
+    <div className="flex-1 overflow-y-auto">
       {/* Top Bar */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img src={logoImage} alt="Kplr" className="w-12 h-12 rounded" />
+        <div className="flex items-center gap-4">
+          <h2 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">Dashboard</h2>
         </div>
         <div className="flex items-center gap-3">
           <Button variant="outline" className="w-[280px] justify-start text-left font-normal">
@@ -327,8 +324,7 @@ export const DashboardPage: React.FC = () => {
       {/* Main Content */}
       <div className="p-6 space-y-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-muted-foreground mt-1">Overview of your test automation metrics</p>
+          <p className="text-muted-foreground">Overview of your test automation metrics</p>
         </div>
 
         {/* Stats Cards */}
@@ -338,9 +334,9 @@ export const DashboardPage: React.FC = () => {
               key={stat.label}
               className={cn(
                 "transition-all",
-                stat.clickable && "cursor-pointer hover:shadow-lg hover:scale-[1.02]"
+                (stat as any).clickable && "cursor-pointer hover:shadow-lg hover:scale-[1.02]"
               )}
-              onClick={stat.onClick}
+              onClick={(stat as any).onClick}
             >
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-xs font-medium uppercase text-muted-foreground">

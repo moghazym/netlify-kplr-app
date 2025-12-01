@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import logoImage from "../../assets/logo-D_k9ADKT.png";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
+import { Badge } from "../../components/ui/badge";
 import { Button } from "../../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../../components/ui/accordion";
+import { Separator } from "../../components/ui/separator";
 import {
   CheckCircle2,
   XCircle,
@@ -22,10 +23,13 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Smartphone,
+  Globe,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Textarea } from "../../components/ui/textarea";
 import { Input } from "../../components/ui/input";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../components/ui/tooltip";
 import { useAuth } from "../../contexts/AuthContext";
 import { useProject } from "../../contexts/ProjectContext";
 import { cn } from "../../lib/utils";
@@ -79,7 +83,11 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [executingScenarioId, setExecutingScenarioId] = useState<string | null>(null);
   const [expandedScenarioId, setExpandedScenarioId] = useState<string | undefined>("");
   const [showAllLogs, setShowAllLogs] = useState(false);
-  const [isRunningAll, setIsRunningAll] = useState(false);
+  const [isRunningAll, setIsRunningAll] = useState<{ web: boolean; ios: boolean; android: boolean }>({
+    web: false,
+    ios: false,
+    android: false,
+  });
   const [showCompletionBanner, setShowCompletionBanner] = useState(false);
   const [lastRunStats, setLastRunStats] = useState<{ passed: number; failed: number; total: number } | null>(null);
 
@@ -87,8 +95,10 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [runningPlatform, setRunningPlatform] = useState<"web" | "ios" | "android" | null>(null);
   const [currentScreenshotIndex, setCurrentScreenshotIndex] = useState(0);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = useState<"web" | "ios" | "android">("web");
 
   // Helper function to construct full image URL from filename or path
   const getImageUrl = (imagePath: string | undefined | null): string | undefined => {
@@ -113,6 +123,13 @@ export const TestSuiteRunsPage: React.FC = () => {
     }
   }, [suiteId, user]);
 
+  // Reset to web if iOS/Android is selected (they're coming soon)
+  useEffect(() => {
+    if (selectedPlatform === "ios" || selectedPlatform === "android") {
+      setSelectedPlatform("web");
+    }
+  }, [selectedPlatform]);
+
   // Cleanup polling on unmount or when suiteId changes
   useEffect(() => {
     return () => {
@@ -128,7 +145,8 @@ export const TestSuiteRunsPage: React.FC = () => {
     if (pollingInterval) {
       clearInterval(pollingInterval);
       setPollingInterval(null);
-      setIsRunningAll(false);
+      setIsRunningAll({ web: false, ios: false, android: false });
+      setRunningPlatform(null);
     }
   }, [suiteId]);
 
@@ -743,7 +761,11 @@ export const TestSuiteRunsPage: React.FC = () => {
           }
         }, 1000);
         
-        setIsRunningAll(false);
+        // Only stop running state if this is the current platform's run
+        if (runningPlatform) {
+          setIsRunningAll(prev => ({ ...prev, [runningPlatform]: false }));
+          setRunningPlatform(null);
+        }
 
         const passedCount = testRun.passed_scenarios || 0;
         const failedCount = testRun.failed_scenarios || 0;
@@ -777,7 +799,10 @@ export const TestSuiteRunsPage: React.FC = () => {
           clearInterval(pollingInterval);
           setPollingInterval(null);
         }
-        setIsRunningAll(false);
+        if (runningPlatform) {
+          setIsRunningAll(prev => ({ ...prev, [runningPlatform]: false }));
+          setRunningPlatform(null);
+        }
         toast({
           title: "Error",
           description: "Test run not found",
@@ -799,7 +824,14 @@ export const TestSuiteRunsPage: React.FC = () => {
       return;
     }
 
-    setIsRunningAll(true);
+    // Stop any existing polling for other platforms
+    if (pollingInterval) {
+      clearInterval(pollingInterval);
+      setPollingInterval(null);
+    }
+
+    setIsRunningAll(prev => ({ ...prev, [selectedPlatform]: true }));
+    setRunningPlatform(selectedPlatform);
     setShowCompletionBanner(false);
 
     try {
@@ -812,6 +844,7 @@ export const TestSuiteRunsPage: React.FC = () => {
       const triggerResponse = await triggerCloudRun({
         project_id: selectedProject.id,
         suite_id: suiteIdNum,
+        platform: selectedPlatform === "web" ? "web" : selectedPlatform,
         options: {
           max_steps: 8,
         },
@@ -866,7 +899,8 @@ export const TestSuiteRunsPage: React.FC = () => {
         description: error instanceof Error ? error.message : "Failed to trigger test run",
         variant: "destructive",
       });
-      setIsRunningAll(false);
+      setIsRunningAll(prev => ({ ...prev, [selectedPlatform]: false }));
+      setRunningPlatform(null);
 
       // Reset scenarios to pending state
       setScenarios(prevScenarios =>
@@ -902,16 +936,7 @@ export const TestSuiteRunsPage: React.FC = () => {
   const selectedScenarioData = scenarios.find(s => s.id === selectedScenario);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-50">
-      {/* Top Bar */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <img src={logoImage} alt="Kplr" className="w-12 h-12 rounded" />
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="p-6 space-y-6">
+    <div className="space-y-6">
         {isLoadingData ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -919,46 +944,98 @@ export const TestSuiteRunsPage: React.FC = () => {
         ) : !suiteInfo ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">Test suite not found</p>
-            <Button onClick={() => navigate("/documents")} variant="outline">
+            <Button onClick={() => navigate("/test-suites")} variant="outline">
               Back to Test Suites
             </Button>
           </div>
         ) : (
           <>
             {/* Header */}
-            <div className="flex items-center justify-between border-b pb-4">
-              <div className="flex items-center gap-3">
-                <Button variant="ghost" size="sm" onClick={() => navigate("/documents")}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back
-                </Button>
-                <h2 className="text-2xl font-semibold">{suiteInfo.name}</h2>
-              </div>
-              <div className="flex gap-3">
-                <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)}>
-                  <Share2 className="h-4 w-4 mr-2" />
-                  Share
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleRunAll}
-                  disabled={isRunningAll || isRunning || scenarios.length === 0}
-                  className="bg-orange-500 hover:bg-orange-600 text-white"
-                >
-                  {isRunningAll ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Running All...
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-4 w-4 mr-2" />
-                      Run All
-                    </>
-                  )}
-                </Button>
+            <div className="space-y-3">
+              <h2 className="text-2xl font-bold">{suiteInfo.name}</h2>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/test-suites")} className="text-muted-foreground hover:text-foreground">
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back
+                  </Button>
+                </div>
+                <div className="flex gap-3">
+                  <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)} className="rounded-lg">
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleRunAll}
+                    disabled={isRunningAll[selectedPlatform] || isRunning || scenarios.length === 0 || selectedPlatform === "ios" || selectedPlatform === "android"}
+                    className="bg-orange-500 hover:bg-orange-600 text-white rounded-lg"
+                  >
+                    {isRunningAll[selectedPlatform] ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Running All...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4 mr-2" />
+                        Run All
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
+
+            <Separator className="mt-6 mb-4" />
+
+            {/* Platform Tabs */}
+            <Card className="bg-white rounded-lg">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 w-full">
+                  <button
+                    onClick={() => setSelectedPlatform("web")}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm font-medium flex-1",
+                      selectedPlatform === "web"
+                        ? "bg-muted text-foreground"
+                        : "bg-transparent text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Globe className={cn("h-3.5 w-3.5", selectedPlatform === "web" ? "text-blue-500" : "text-muted-foreground")} />
+                    <span>Web</span>
+                  </button>
+                  <button
+                    onClick={() => setSelectedPlatform("ios")}
+                    disabled={true}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm font-medium flex-1",
+                      selectedPlatform === "ios"
+                        ? "bg-muted text-foreground"
+                        : "bg-transparent text-muted-foreground hover:text-foreground",
+                      "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    <Smartphone className={cn("h-3.5 w-3.5", selectedPlatform === "ios" ? "text-blue-500" : "text-muted-foreground")} />
+                    <span>iOS (Coming Soon)</span>
+                  </button>
+                  <button
+                    onClick={() => setSelectedPlatform("android")}
+                    disabled={true}
+                    className={cn(
+                      "flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm font-medium flex-1",
+                      selectedPlatform === "android"
+                        ? "bg-muted text-foreground"
+                        : "bg-transparent text-muted-foreground hover:text-foreground",
+                      "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    <Smartphone className={cn("h-3.5 w-3.5", selectedPlatform === "android" ? "text-blue-500" : "text-muted-foreground")} />
+                    <span>Android (Coming Soon)</span>
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Completion Banner */}
             {showCompletionBanner && lastRunStats && (
@@ -1021,54 +1098,90 @@ export const TestSuiteRunsPage: React.FC = () => {
                             <span className="text-sm font-medium break-words block">{scenario.name}</span>
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 w-7 p-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingScenario({ id: scenario.id, name: scenario.name });
-                                setIsEditDialogOpen(true);
-                              }}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingScenario({ id: scenario.id, name: scenario.name });
+                                      setIsEditDialogOpen(true);
+                                    }}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Edit Scenario</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
 
                             {scenario.status === 'failed' && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                              >
-                                <Bug className="h-3 w-3" />
-                              </Button>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                                    >
+                                      <Bug className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Create Bug Ticket</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             )}
 
                             {scenario.hasRun ? (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 w-7 p-0"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRerunScenario(scenario.id);
-                                }}
-                              >
-                                <RotateCcw className="h-3 w-3" />
-                              </Button>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 w-7 p-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRerunScenario(scenario.id);
+                                      }}
+                                    >
+                                      <RotateCcw className="h-3 w-3" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Rerun Scenario</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             ) : (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-7 px-2"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRunFromDraft(scenario.id);
-                                }}
-                              >
-                                <Play className="h-3 w-3 mr-1" />
-                                Run
-                              </Button>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-7 px-2"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRunFromDraft(scenario.id);
+                                      }}
+                                    >
+                                      <Play className="h-3 w-3 mr-1" />
+                                      Run
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Run Scenario</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
                             )}
                           </div>
                         </div>
@@ -1172,8 +1285,18 @@ export const TestSuiteRunsPage: React.FC = () => {
                   <>
                     {/* Screenshots */}
                     <Card>
-                      <CardHeader>
+                      <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="text-base">Screenshots</CardTitle>
+                        {selectedPlatform && (
+                          <Badge variant="outline" className="flex items-center gap-1">
+                            {selectedPlatform === 'web' ? (
+                              <Globe className="w-3 h-3" />
+                            ) : (
+                              <Smartphone className="w-3 h-3" />
+                            )}
+                            {selectedPlatform === 'web' ? 'Web' : selectedPlatform === 'ios' ? 'iOS' : 'Android'}
+                          </Badge>
+                        )}
                       </CardHeader>
                       <CardContent>
                         {(() => {
@@ -1467,9 +1590,12 @@ export const TestSuiteRunsPage: React.FC = () => {
                 ) : (
                   <Card>
                     <CardContent className="flex items-center justify-center h-[400px]">
-                      <p className="text-muted-foreground text-sm">
-                        Select a scenario to view details
-                      </p>
+                      <div className="text-center space-y-2">
+                        <Globe className="w-12 h-12 mx-auto text-muted-foreground/50" />
+                        <p className="text-muted-foreground text-sm">
+                          Select a scenario to view details
+                        </p>
+                      </div>
                     </CardContent>
                   </Card>
                 )}
@@ -1563,25 +1689,36 @@ export const TestSuiteRunsPage: React.FC = () => {
                     Anyone with this link can view the test results and screenshots.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="flex items-center space-x-2">
-                  <Input
-                    readOnly
-                    value={`${window.location.origin}/share/suite/${suiteId}/run/latest`}
-                    className="font-mono text-sm"
-                  />
-                  <Button size="sm" className="px-3" onClick={handleShare}>
-                    {copied ? (
-                      <Check className="h-4 w-4" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-                <DialogFooter className="sm:justify-start">
-                  <Button variant="secondary" onClick={() => setIsShareDialogOpen(false)}>
-                    Close
-                  </Button>
-                </DialogFooter>
+          <div className="flex items-center space-x-2">
+            <div className="grid flex-1 gap-2">
+              <Input
+                readOnly
+                value={`${window.location.origin}/share/suite/${suiteId}/run/latest`}
+                className="font-mono text-sm"
+              />
+            </div>
+            <Button size="sm" className="px-3" onClick={handleShare}>
+              {copied ? (
+                <Check className="h-4 w-4" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+          <div className="rounded-lg bg-muted/50 p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              <p className="text-sm font-medium">Live Updates Enabled</p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This link always shows the latest test run results. Perfect for sharing with your team or embedding in dashboards.
+            </p>
+          </div>
+          <DialogFooter className="sm:justify-start">
+            <Button variant="secondary" onClick={() => setIsShareDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
               </DialogContent>
             </Dialog>
 
@@ -1608,7 +1745,6 @@ export const TestSuiteRunsPage: React.FC = () => {
             </Dialog>
           </>
         )}
-      </div>
     </div>
   );
 };

@@ -42,11 +42,12 @@ const mockProjects: ProjectResponse[] = [
 
 /**
  * Check if we should use mock API
- * Disabled - always use real API at api.usekplr.com
+ * In development mode, use mock API to bypass real services
  */
 export const shouldUseMockApi = (): boolean => {
-  // Always use real API
-  return false;
+  // Use mock API in development mode
+  // return import.meta.env.DEV;
+  return true;
 };
 
 /**
@@ -842,5 +843,280 @@ export const mockGetRecentTestRuns = async (params?: any): Promise<TestRunRespon
   // Apply limit
   const limit = params?.limit || 10;
   return runs.slice(0, limit);
+};
+
+// ============================================================================
+// App Registry API Mocks
+// ============================================================================
+
+export interface MobileAppBuildResponse {
+  id: number;
+  app_id: number;
+  version: string;
+  channel?: string | null;
+  notes?: string | null;
+  status: string;
+  storage_path: string;
+  download_url: string;
+  file_name?: string | null;
+  file_size?: number | null;
+  content_type?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MobileAppResponse {
+  id: number;
+  project_id: number;
+  name: string;
+  package_id: string;
+  platform: string;
+  description?: string | null;
+  icon_url?: string | null;
+  created_at: string;
+  updated_at: string;
+  builds?: MobileAppBuildResponse[];
+}
+
+const mockMobileApps: MobileAppResponse[] = [
+  {
+    id: 1,
+    project_id: 1,
+    name: "My iOS App",
+    package_id: "com.example.iosapp",
+    platform: "ios",
+    description: "Main iOS application",
+    icon_url: null,
+    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    builds: [
+      {
+        id: 1,
+        app_id: 1,
+        version: "1.2.0",
+        channel: "production",
+        notes: "Latest stable release",
+        status: "completed",
+        storage_path: "builds/ios/1.2.0.ipa",
+        download_url: "https://example.com/builds/ios/1.2.0.ipa",
+        file_name: "MyApp-1.2.0.ipa",
+        file_size: 45 * 1024 * 1024, // 45 MB
+        content_type: "application/octet-stream",
+        created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        updated_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        id: 2,
+        app_id: 1,
+        version: "1.1.0",
+        channel: "production",
+        notes: null,
+        status: "completed",
+        storage_path: "builds/ios/1.1.0.ipa",
+        download_url: "https://example.com/builds/ios/1.1.0.ipa",
+        file_name: "MyApp-1.1.0.ipa",
+        file_size: 44 * 1024 * 1024, // 44 MB
+        content_type: "application/octet-stream",
+        created_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+        updated_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+    ],
+  },
+  {
+    id: 2,
+    project_id: 1,
+    name: "My Android App",
+    package_id: "com.example.androidapp",
+    platform: "android",
+    description: "Main Android application",
+    icon_url: null,
+    created_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
+    updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    builds: [
+      {
+        id: 3,
+        app_id: 2,
+        version: "2.0.0",
+        channel: "beta",
+        notes: "Beta release with new features",
+        status: "completed",
+        storage_path: "builds/android/2.0.0.apk",
+        download_url: "https://example.com/builds/android/2.0.0.apk",
+        file_name: "MyApp-2.0.0.apk",
+        file_size: 38 * 1024 * 1024, // 38 MB
+        content_type: "application/vnd.android.package-archive",
+        created_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        updated_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+    ],
+  },
+];
+
+let nextAppId = 3;
+let nextBuildId = 4;
+
+// Store pending uploads to retrieve data when completing
+const pendingUploads = new Map<number, {
+  app_id: number;
+  file_name: string;
+  content_type?: string;
+  version: string;
+  channel?: string;
+  notes?: string;
+  storage_path: string;
+  download_url: string;
+}>();
+
+export const mockGetMobileApps = async (projectId?: number): Promise<MobileAppResponse[]> => {
+  await new Promise(resolve => setTimeout(resolve, 300));
+
+  let apps = [...mockMobileApps];
+
+  if (projectId) {
+    apps = apps.filter(app => app.project_id === projectId);
+  }
+
+  return apps;
+};
+
+export const mockCreateMobileApp = async (data: {
+  project_id: number;
+  name: string;
+  package_id: string;
+  platform: string;
+  description?: string;
+  icon_url?: string;
+}): Promise<MobileAppResponse> => {
+  await new Promise(resolve => setTimeout(resolve, 400));
+
+  const newApp: MobileAppResponse = {
+    id: nextAppId++,
+    project_id: data.project_id,
+    name: data.name,
+    package_id: data.package_id,
+    platform: data.platform,
+    description: data.description || null,
+    icon_url: data.icon_url || null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    builds: [],
+  };
+
+  mockMobileApps.push(newApp);
+  return newApp;
+};
+
+export const mockRequestMobileAppBuildUpload = async (
+  appId: number,
+  data: {
+    file_name: string;
+    content_type?: string;
+    version: string;
+    channel?: string;
+    notes?: string;
+  }
+): Promise<{
+  build_id: number;
+  signed_url: string;
+  storage_path: string;
+  download_url: string;
+}> => {
+  await new Promise(resolve => setTimeout(resolve, 300));
+
+  const app = mockMobileApps.find(a => a.id === appId);
+  if (!app) {
+    throw new Error(`App with id ${appId} not found`);
+  }
+
+  const buildId = nextBuildId++;
+  const storagePath = `builds/${app.platform}/${data.version}/${data.file_name}`;
+  const downloadUrl = `https://example.com/${storagePath}`;
+
+  // Store upload request data for when we complete the build
+  pendingUploads.set(buildId, {
+    app_id: appId,
+    file_name: data.file_name,
+    content_type: data.content_type,
+    version: data.version,
+    channel: data.channel,
+    notes: data.notes,
+    storage_path: storagePath,
+    download_url: downloadUrl,
+  });
+
+  return {
+    build_id: buildId,
+    signed_url: `https://storage.example.com/upload/${buildId}?signature=mock`,
+    storage_path: storagePath,
+    download_url: downloadUrl,
+  };
+};
+
+export const mockCompleteMobileAppBuild = async (
+  buildId: number,
+  data: {
+    file_size?: number;
+    status?: string;
+  }
+): Promise<MobileAppBuildResponse> => {
+  await new Promise(resolve => setTimeout(resolve, 200));
+
+  // Retrieve upload request data
+  const uploadData = pendingUploads.get(buildId);
+  if (!uploadData) {
+    throw new Error(`Upload request for build ${buildId} not found`);
+  }
+
+  // Find the app
+  const app = mockMobileApps.find(a => a.id === uploadData.app_id);
+  if (!app) {
+    throw new Error(`App with id ${uploadData.app_id} not found`);
+  }
+
+  const build: MobileAppBuildResponse = {
+    id: buildId,
+    app_id: uploadData.app_id,
+    version: uploadData.version,
+    channel: uploadData.channel || null,
+    notes: uploadData.notes || null,
+    status: data.status || "completed",
+    storage_path: uploadData.storage_path,
+    download_url: uploadData.download_url,
+    file_name: uploadData.file_name,
+    file_size: data.file_size || null,
+    content_type: uploadData.content_type || null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  // Add build to app
+  if (!app.builds) {
+    app.builds = [];
+  }
+  app.builds.push(build);
+
+  // Remove from pending uploads
+  pendingUploads.delete(buildId);
+
+  return build;
+};
+
+export const mockDeleteMobileAppBuild = async (buildId: number): Promise<void> => {
+  await new Promise(resolve => setTimeout(resolve, 200));
+
+  // Also remove from pending uploads if it exists there
+  pendingUploads.delete(buildId);
+
+  for (const app of mockMobileApps) {
+    if (app.builds) {
+      const index = app.builds.findIndex(b => b.id === buildId);
+      if (index !== -1) {
+        app.builds.splice(index, 1);
+        return;
+      }
+    }
+  }
+
+  throw new Error(`Build with id ${buildId} not found`);
 };
 

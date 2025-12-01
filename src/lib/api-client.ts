@@ -33,6 +33,11 @@ import {
   mockRevealSecret,
   mockGetDashboardStatistics,
   mockGetRecentTestRuns,
+  mockGetMobileApps,
+  mockCreateMobileApp,
+  mockRequestMobileAppBuildUpload,
+  mockCompleteMobileAppBuild,
+  mockDeleteMobileAppBuild,
 } from './mock-api';
 import { clearUserFromStorage } from './auth-storage';
 import { redirectToAuth } from './auth-redirect';
@@ -68,7 +73,8 @@ export const apiRequest = async <T = any>(
   // Add Authorization header if we have a token
   // For localhost, we rely on tokens stored in localStorage/sessionStorage from checkUrlForAuth()
   // For production, we use cookies (which are automatically sent with credentials: 'include')
-  if (typeof window !== 'undefined') {
+  // Skip auth token requirement when using mock API
+  if (typeof window !== 'undefined' && !shouldUseMockApi()) {
     const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
     if (token && !headers['Authorization']) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -123,11 +129,12 @@ export const apiRequest = async <T = any>(
     
     // Check for credential validation error and trigger re-authentication
     // This handles both the specific error message and 401 Unauthorized status
+    // Skip auth redirect when using mock API
     const isCredentialError = (typeof errorMessage === 'string' && 
         errorMessage.toLowerCase().includes('could not validate credentials')) ||
         response.status === 401;
     
-    if (isCredentialError) {
+    if (isCredentialError && !shouldUseMockApi()) {
       console.warn('[API] Credential validation failed, triggering re-authentication', {
         status: response.status,
         errorMessage,
@@ -174,6 +181,21 @@ const handleMockRequest = async <T = any>(
   options: RequestInit = {}
 ): Promise<T> => {
   const method = options.method || 'GET';
+
+  // ============================================================================
+  // Auth API
+  // ============================================================================
+
+  // Handle GET /api/auth/me
+  if (method === 'GET' && endpoint.includes('/api/auth/me')) {
+    // Return mock user data
+    return {
+      id: '1',
+      name: 'Dev User',
+      email: 'dev@example.com',
+      picture: undefined,
+    } as T;
+  }
 
   // ============================================================================
   // Projects API
@@ -525,6 +547,62 @@ const handleMockRequest = async <T = any>(
       }
     }
     return mockGetRecentTestRuns(params) as Promise<T>;
+  }
+
+  // ============================================================================
+  // App Registry API
+  // ============================================================================
+
+  // Handle GET /api/app-registry/apps
+  if (method === 'GET' && endpoint.includes('/api/app-registry/apps') && !endpoint.includes('/build-uploads')) {
+    let parsedProjectId: number | undefined;
+    try {
+      const url = new URL(endpoint, 'http://dummy');
+      const projectId = url.searchParams.get('project_id');
+      parsedProjectId = projectId ? parseInt(projectId, 10) : undefined;
+    } catch {
+      const match = endpoint.match(/[?&]project_id=(\d+)/);
+      if (match) {
+        parsedProjectId = parseInt(match[1], 10);
+      }
+    }
+    return mockGetMobileApps(parsedProjectId) as Promise<T>;
+  }
+
+  // Handle POST /api/app-registry/apps
+  if (method === 'POST' && endpoint.includes('/api/app-registry/apps') && !endpoint.includes('/build-uploads')) {
+    const body = options.body ? JSON.parse(options.body as string) : {};
+    return mockCreateMobileApp(body) as Promise<T>;
+  }
+
+  // Handle POST /api/app-registry/apps/{id}/build-uploads
+  if (method === 'POST' && endpoint.match(/\/api\/app-registry\/apps\/\d+\/build-uploads/)) {
+    const match = endpoint.match(/\/api\/app-registry\/apps\/(\d+)\/build-uploads/);
+    if (match) {
+      const appId = parseInt(match[1], 10);
+      const body = options.body ? JSON.parse(options.body as string) : {};
+      return mockRequestMobileAppBuildUpload(appId, body) as Promise<T>;
+    }
+  }
+
+  // Handle POST /api/app-registry/builds/{id}/complete
+  if (method === 'POST' && endpoint.match(/\/api\/app-registry\/builds\/\d+\/complete/)) {
+    const match = endpoint.match(/\/api\/app-registry\/builds\/(\d+)\/complete/);
+    if (match) {
+      const buildId = parseInt(match[1], 10);
+      const body = options.body ? JSON.parse(options.body as string) : {};
+      return mockCompleteMobileAppBuild(buildId, body) as Promise<T>;
+    }
+  }
+
+  // Handle DELETE /api/app-registry/builds/{id}
+  if (method === 'DELETE' && endpoint.match(/\/api\/app-registry\/builds\/\d+$/)) {
+    const match = endpoint.match(/\/api\/app-registry\/builds\/(\d+)$/);
+    if (match) {
+      const buildId = parseInt(match[1], 10);
+      await mockDeleteMobileAppBuild(buildId);
+      return undefined as T;
+    }
   }
 
   // Fallback: return empty array or throw error
@@ -941,6 +1019,7 @@ export interface CloudRunTriggerRequest {
   suite_id: number;
   scenario_id?: number;
   schedule_id?: string;
+  platform?: string;
   options?: { max_steps?: number };
 }
 
@@ -1114,6 +1193,13 @@ export const completeMobileAppBuild = async (
   data: CompleteBuildRequest
 ): Promise<MobileAppBuildResponse> => {
   return apiPost<MobileAppBuildResponse>(`/api/app-registry/builds/${buildId}/complete`, data);
+};
+
+/**
+ * Delete a mobile app build
+ */
+export const deleteMobileAppBuild = async (buildId: number): Promise<void> => {
+  return apiDelete(`/api/app-registry/builds/${buildId}`);
 };
 
 // ============================================================================
