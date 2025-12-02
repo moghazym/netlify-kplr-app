@@ -123,6 +123,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     logAuth('logout() invoked');
+    // Set a flag to prevent ProtectedRoute from redirecting during logout
+    sessionStorage.setItem('logout_in_progress', 'true');
+    
     try {
       await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/auth/logout`, {
         method: 'POST',
@@ -134,6 +137,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(null);
       clearUserFromStorage();
       logAuth('Local session cleared');
+      // Redirect to usekplr.com after logout - use replace to prevent back navigation
+      window.location.replace('https://usekplr.com');
     }
   };
 

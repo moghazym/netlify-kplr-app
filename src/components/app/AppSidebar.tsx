@@ -272,7 +272,6 @@ export function AppSidebar() {
               <SidebarMenuButton
                 onClick={() => {
                   logout();
-                  window.location.href = 'https://usekplr.com';
                 }}
                 tooltip={collapsed ? "Logout" : undefined}
               >

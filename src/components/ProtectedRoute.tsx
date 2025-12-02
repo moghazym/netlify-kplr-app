@@ -38,6 +38,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
       return;
     }
 
+    // Don't redirect if logout is in progress (will redirect to usekplr.com)
+    if (sessionStorage.getItem('logout_in_progress') === 'true') {
+      return;
+    }
+
     // Only redirect once and only if not authenticated
     if (!loading && !actuallyAuthenticated && !hasRedirected.current) {
       hasRedirected.current = true;
