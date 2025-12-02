@@ -256,6 +256,20 @@ export const TestRunDetailPage: React.FC = () => {
           scenarioStatus = isTestRunActive ? "running" : ((apiScenario.status as "pending" | "running" | "passed" | "failed") || "running");
         }
 
+        // If scenario failed, mark the last executed step as failed so it shows an X icon
+        if (scenarioStatus === "failed" && steps.length > 0) {
+          // Find the last executed step (the step where it failed)
+          for (let i = steps.length - 1; i >= 0; i--) {
+            const step = steps[i];
+            const isExecuted = !!(step.beforeScreenshot || step.afterScreenshot || step.reasoning);
+            if (isExecuted) {
+              // Mark this step as failed since it's the step where the scenario failed
+              step.status = "failed";
+              break;
+            }
+          }
+        }
+
         // Use backend scenario name if available, otherwise use API scenario name
         const backendScenario = backendScenarios?.find(s => s.id === apiScenario.id);
         const scenarioName = backendScenario?.name || apiScenario.name;
@@ -366,6 +380,20 @@ export const TestRunDetailPage: React.FC = () => {
         } else {
           const defaultStatus = isTestRunActive ? "running" : (testRun.status === "completed" ? "passed" : "running");
           scenarioStatus = (session.scenario?.status || defaultStatus) as "pending" | "running" | "passed" | "failed";
+        }
+
+        // If scenario failed, mark the last executed step as failed so it shows an X icon
+        if (scenarioStatus === "failed" && steps.length > 0) {
+          // Find the last executed step (the step where it failed)
+          for (let i = steps.length - 1; i >= 0; i--) {
+            const step = steps[i];
+            const isExecuted = !!(step.beforeScreenshot || step.afterScreenshot || step.reasoning);
+            if (isExecuted) {
+              // Mark this step as failed since it's the step where the scenario failed
+              step.status = "failed";
+              break;
+            }
+          }
         }
 
         mappedScenarios.push({

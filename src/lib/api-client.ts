@@ -988,8 +988,12 @@ export interface TestRunScenario {
 
 export interface TestRunSession {
   id?: string;
+  session_uuid?: string;
   scenario_id?: number;
   scenario?: TestRunScenario;
+  status?: string;
+  query?: string;
+  created_at?: string;
   steps?: TestRunStep[];
   console_logs?: string[];
   network_logs?: string[];

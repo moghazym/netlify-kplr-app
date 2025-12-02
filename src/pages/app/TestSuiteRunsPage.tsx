@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
@@ -93,10 +93,10 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [showCompletionBanner, setShowCompletionBanner] = useState(false);
   const [lastRunStats, setLastRunStats] = useState<{ passed: number; failed: number; total: number } | null>(null);
 
-  const [suiteInfo, setSuiteInfo] = useState<{ name: string; description?: string } | null>(null);
+  const [suiteInfo, setSuiteInfo] = useState<{ name: string; description?: string; application_url?: string | null } | null>(null);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [runningPlatform, setRunningPlatform] = useState<"web" | "ios" | "android" | null>(null);
   const [currentScreenshotIndex, setCurrentScreenshotIndex] = useState(0);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
@@ -135,18 +135,18 @@ export const TestSuiteRunsPage: React.FC = () => {
   // Cleanup polling on unmount or when suiteId changes
   useEffect(() => {
     return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-        setPollingInterval(null);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
     };
-  }, [pollingInterval]);
+  }, []);
 
   // Stop polling if suiteId changes
   useEffect(() => {
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
-      setPollingInterval(null);
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
       setIsRunningAll({ web: false, ios: false, android: false });
       setRunningPlatform(null);
     }
@@ -174,6 +174,7 @@ export const TestSuiteRunsPage: React.FC = () => {
       setSuiteInfo({
         name: suiteData.name,
         description: suiteData.description || undefined,
+        application_url: suiteData.application_url || undefined,
       });
 
       // If there's a latest test run, load its full details and map to scenarios
@@ -205,12 +206,12 @@ export const TestSuiteRunsPage: React.FC = () => {
           const scenariosWithoutRun = scenariosData
             .filter(s => !scenarioIdsWithRun.has(s.id.toString()))
             .map(scenario => ({
-              id: scenario.id.toString(),
-              name: scenario.name,
-              status: "pending" as const,
-              hasRun: false,
-              steps: [],
-            }));
+        id: scenario.id.toString(),
+        name: scenario.name,
+        status: "pending" as const,
+        hasRun: false,
+        steps: [],
+      }));
 
           setScenarios([...mergedScenarios, ...scenariosWithoutRun]);
 
@@ -231,7 +232,7 @@ export const TestSuiteRunsPage: React.FC = () => {
             hasRun: false,
             steps: [],
           }));
-          setScenarios(transformedScenarios);
+      setScenarios(transformedScenarios);
         }
       } else {
         // No test run exists, just show scenarios
@@ -258,19 +259,50 @@ export const TestSuiteRunsPage: React.FC = () => {
 
 
   const handleAddScenario = async () => {
-    if (!newScenario.trim()) return;
-    const newId = crypto.randomUUID();
-    setScenarios([...scenarios, {
-      id: newId,
-      name: newScenario,
-      status: "pending",
-      hasRun: false,
-      steps: [],
-    }]);
-    setNewScenario("");
-    setIsAddDialogOpen(false);
-    // Run all scenarios when adding a new one
-    await handleRunAll();
+    if (!newScenario.trim() || !suiteId) return;
+
+    const suiteIdNum = parseInt(suiteId, 10);
+    if (isNaN(suiteIdNum)) {
+      toast({
+        title: "Error",
+        description: "Invalid test suite ID",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Create scenario via API first
+      await createScenario({
+        test_suite_id: suiteIdNum,
+        name: newScenario.trim(),
+        description: null,
+      });
+
+      // Reload scenarios from API to get the latest data
+      const scenariosData = await getScenarios(suiteIdNum);
+      const transformedScenarios: Scenario[] = scenariosData.map(scenario => ({
+        id: scenario.id.toString(),
+        name: scenario.name,
+        status: "pending" as const,
+        hasRun: false,
+        steps: [],
+      }));
+
+      setScenarios(transformedScenarios);
+      setNewScenario("");
+      setIsAddDialogOpen(false);
+
+      // Run all scenarios after adding the new one
+      await handleRunAll();
+    } catch (error) {
+      console.error("Error adding scenario:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to add scenario",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleSaveAsDraft = async () => {
@@ -300,13 +332,13 @@ export const TestSuiteRunsPage: React.FC = () => {
         id: scenario.id.toString(),
         name: scenario.name,
         status: "pending" as const,
-        hasRun: false,
-        steps: [],
+      hasRun: false,
+      steps: [],
       }));
 
       setScenarios(transformedScenarios);
-      setNewScenario("");
-      setIsAddDialogOpen(false);
+    setNewScenario("");
+    setIsAddDialogOpen(false);
 
       toast({
         title: "Success",
@@ -493,7 +525,30 @@ export const TestSuiteRunsPage: React.FC = () => {
         // Determine scenario status based on steps
         // Scenario stays "running" while test is active, only show final status when test run is complete
         let scenarioStatus: "pending" | "running" | "passed" | "failed" = "running";
-        if (steps.length > 0) {
+        
+        // First check test run status and scenario status if test run is complete
+        if (isTestRunComplete) {
+          // Check test run status first
+          if (testRun.status) {
+            const testRunStatus = (testRun.status as string).toLowerCase();
+            if (testRunStatus === "failed" || testRunStatus === "error") {
+              scenarioStatus = "failed";
+            }
+          }
+          
+          // Also check scenario status
+          if (scenarioStatus === "running" && apiScenario.status) {
+            const apiStatus = (apiScenario.status as string).toLowerCase();
+            if (apiStatus === "failed" || apiStatus === "error") {
+              scenarioStatus = "failed";
+            } else if (apiStatus === "passed" || apiStatus === "complete" || apiStatus === "success") {
+              scenarioStatus = "passed";
+            }
+          }
+        }
+        
+        // If status not determined from API, check steps
+        if (scenarioStatus === "running" && steps.length > 0) {
           const lastStep = steps[steps.length - 1];
           const lastStepExecuted = !!(lastStep.beforeScreenshot || lastStep.afterScreenshot || lastStep.reasoning);
 
@@ -509,13 +564,54 @@ export const TestSuiteRunsPage: React.FC = () => {
                 lastStep.reasoning?.toLowerCase().includes("error");
               scenarioStatus = hasError ? "failed" : "passed";
             }
-          } else {
-            // Test is still running or last step not executed yet, scenario is still running
-            scenarioStatus = "running";
+          } else if (isTestRunComplete && !lastStepExecuted) {
+            // Test run is complete but last step not executed - check if any step executed and scenario failed
+            const anyStepExecuted = steps.some(s => !!(s.beforeScreenshot || s.afterScreenshot || s.reasoning));
+            if (anyStepExecuted) {
+              // Check test run status first
+              if (testRun.status) {
+                const testRunStatus = (testRun.status as string).toLowerCase();
+                if (testRunStatus === "failed" || testRunStatus === "error") {
+                  scenarioStatus = "failed";
+                }
+              }
+              
+              // If still running, check scenario API status
+              if (scenarioStatus === "running" && apiScenario.status) {
+                const apiStatus = (apiScenario.status as string).toLowerCase();
+                if (apiStatus === "failed" || apiStatus === "error") {
+                  scenarioStatus = "failed";
+                }
+              }
+              
+              // If still running, check executed steps for errors
+              if (scenarioStatus === "running") {
+                const executedStep = steps.find(s => !!(s.beforeScreenshot || s.afterScreenshot || s.reasoning));
+                if (executedStep) {
+                  const hasError = executedStep.reasoning?.toLowerCase().includes("failed") ||
+                    executedStep.reasoning?.toLowerCase().includes("error");
+                  scenarioStatus = hasError ? "failed" : "running";
+                }
+              }
+            }
           }
-        } else {
+        } else if (scenarioStatus === "running" && steps.length === 0) {
           // No steps yet - show running if test is active, otherwise use API status
           scenarioStatus = isTestRunActive ? "running" : ((apiScenario.status as "pending" | "running" | "passed" | "failed") || "running");
+        }
+
+        // If scenario failed, mark the last executed step as failed so it shows an X icon
+        if (scenarioStatus === "failed" && steps.length > 0) {
+          // Find the last executed step (the step where it failed)
+          for (let i = steps.length - 1; i >= 0; i--) {
+            const step = steps[i];
+            const isExecuted = !!(step.beforeScreenshot || step.afterScreenshot || step.reasoning);
+            if (isExecuted) {
+              // Mark this step as failed since it's the step where the scenario failed
+              step.status = "failed";
+              break;
+            }
+          }
         }
 
         mappedScenarios.push({
@@ -618,7 +714,40 @@ export const TestSuiteRunsPage: React.FC = () => {
         // Determine scenario status based on steps
         // Scenario stays "running" while test is active, only show final status when test run is complete
         let scenarioStatus: "pending" | "running" | "passed" | "failed" = "running";
-        if (steps.length > 0) {
+        
+        // First check session status and test run status if test run is complete
+        if (isTestRunComplete) {
+          // Check session status first (this is the primary indicator)
+          if (session.status) {
+            const sessionStatus = (session.status as string).toUpperCase();
+            if (sessionStatus === "FAILED" || sessionStatus === "ERROR") {
+              scenarioStatus = "failed";
+            } else if (sessionStatus === "PASSED" || sessionStatus === "COMPLETE" || sessionStatus === "SUCCESS") {
+              scenarioStatus = "passed";
+            }
+          }
+          
+          // Also check test run status as fallback
+          if (scenarioStatus === "running" && testRun.status) {
+            const testRunStatus = (testRun.status as string).toLowerCase();
+            if (testRunStatus === "failed" || testRunStatus === "error") {
+              scenarioStatus = "failed";
+            } else if (testRunStatus === "completed") {
+              // If test run is completed but session status wasn't set, check scenario status
+              if (session.scenario?.status) {
+                const apiStatus = (session.scenario.status as string).toLowerCase();
+                if (apiStatus === "failed" || apiStatus === "error") {
+                  scenarioStatus = "failed";
+                } else if (apiStatus === "passed" || apiStatus === "complete" || apiStatus === "success") {
+                  scenarioStatus = "passed";
+                }
+              }
+            }
+          }
+        }
+        
+        // If status not determined from API, check steps
+        if (scenarioStatus === "running" && steps.length > 0) {
           const lastStep = steps[steps.length - 1];
           const lastStepExecuted = !!(lastStep.beforeScreenshot || lastStep.afterScreenshot || lastStep.reasoning);
 
@@ -634,14 +763,65 @@ export const TestSuiteRunsPage: React.FC = () => {
                 lastStep.reasoning?.toLowerCase().includes("error");
               scenarioStatus = hasError ? "failed" : "passed";
             }
-          } else {
-            // Test is still running or last step not executed yet, scenario is still running
-            scenarioStatus = "running";
+          } else if (isTestRunComplete && !lastStepExecuted) {
+            // Test run is complete but last step not executed - check if any step executed and scenario failed
+            const anyStepExecuted = steps.some(s => !!(s.beforeScreenshot || s.afterScreenshot || s.reasoning));
+            if (anyStepExecuted) {
+              // Check session status first
+              if (session.status) {
+                const sessionStatus = (session.status as string).toUpperCase();
+                if (sessionStatus === "FAILED" || sessionStatus === "ERROR") {
+                  scenarioStatus = "failed";
+                } else if (sessionStatus === "PASSED" || sessionStatus === "COMPLETE" || sessionStatus === "SUCCESS") {
+                  scenarioStatus = "passed";
+                }
+              }
+              
+              // If still running, check test run status
+              if (scenarioStatus === "running" && testRun.status) {
+                const testRunStatus = (testRun.status as string).toLowerCase();
+                if (testRunStatus === "failed" || testRunStatus === "error") {
+                  scenarioStatus = "failed";
+                }
+              }
+              
+              // If still running, check scenario status
+              if (scenarioStatus === "running" && session.scenario?.status) {
+                const apiStatus = (session.scenario.status as string).toLowerCase();
+                if (apiStatus === "failed" || apiStatus === "error") {
+                  scenarioStatus = "failed";
+                }
+              }
+              
+              // If still running, check executed steps for errors
+              if (scenarioStatus === "running") {
+                const executedStep = steps.find(s => !!(s.beforeScreenshot || s.afterScreenshot || s.reasoning));
+                if (executedStep) {
+                  const hasError = executedStep.reasoning?.toLowerCase().includes("failed") ||
+                    executedStep.reasoning?.toLowerCase().includes("error");
+                  scenarioStatus = hasError ? "failed" : "running";
+                }
+              }
+            }
           }
-        } else {
+        } else if (scenarioStatus === "running" && steps.length === 0) {
           // No steps yet - show running if test is active, otherwise use API status
           const defaultStatus = isTestRunActive ? "running" : (testRun.status === "completed" ? "passed" : "running");
           scenarioStatus = (session.scenario?.status || defaultStatus) as "pending" | "running" | "passed" | "failed";
+        }
+
+        // If scenario failed, mark the last executed step as failed so it shows an X icon
+        if (scenarioStatus === "failed" && steps.length > 0) {
+          // Find the last executed step (the step where it failed)
+          for (let i = steps.length - 1; i >= 0; i--) {
+            const step = steps[i];
+            const isExecuted = !!(step.beforeScreenshot || step.afterScreenshot || step.reasoning);
+            if (isExecuted) {
+              // Mark this step as failed since it's the step where the scenario failed
+              step.status = "failed";
+              break;
+            }
+          }
         }
 
         mappedScenarios.push({
@@ -711,9 +891,18 @@ export const TestSuiteRunsPage: React.FC = () => {
       // Check if test run is complete
       if (testRun.status === "completed" || testRun.status === "failed") {
         // Stop polling
-        if (pollingInterval) {
-          clearInterval(pollingInterval);
-          setPollingInterval(null);
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        
+        // Always reset running state when test run completes
+        if (runningPlatform) {
+          setIsRunningAll(prev => ({ ...prev, [runningPlatform]: false }));
+          setRunningPlatform(null);
+        } else {
+          // Fallback: reset all platforms if runningPlatform is not set
+          setIsRunningAll({ web: false, ios: false, android: false });
         }
         
         // Do one final poll after a short delay to ensure all data is available
@@ -742,12 +931,6 @@ export const TestSuiteRunsPage: React.FC = () => {
             // Fall back to current data if final poll fails
           }
         }, 1000);
-        
-        // Only stop running state if this is the current platform's run
-        if (runningPlatform) {
-          setIsRunningAll(prev => ({ ...prev, [runningPlatform]: false }));
-          setRunningPlatform(null);
-        }
 
         const passedCount = testRun.passed_scenarios || 0;
         const failedCount = testRun.failed_scenarios || 0;
@@ -777,9 +960,9 @@ export const TestSuiteRunsPage: React.FC = () => {
 
       // If we get a 404 or the test run doesn't exist, stop polling
       if (error instanceof Error && error.message.includes("404")) {
-        if (pollingInterval) {
-          clearInterval(pollingInterval);
-          setPollingInterval(null);
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
         }
         if (runningPlatform) {
           setIsRunningAll(prev => ({ ...prev, [runningPlatform]: false }));
@@ -807,9 +990,9 @@ export const TestSuiteRunsPage: React.FC = () => {
     }
 
     // Stop any existing polling for other platforms
-    if (pollingInterval) {
-      clearInterval(pollingInterval);
-      setPollingInterval(null);
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
     }
 
     setIsRunningAll(prev => ({ ...prev, [selectedPlatform]: true }));
@@ -837,12 +1020,12 @@ export const TestSuiteRunsPage: React.FC = () => {
       // Initial poll
       await pollTestRun(testRunId);
 
-      // Set up polling interval (poll every 2 seconds)
+      // Set up polling interval (poll every 5 seconds)
       const interval = setInterval(() => {
         pollTestRun(testRunId);
-      }, 2000);
+      }, 5000);
 
-      setPollingInterval(interval);
+      pollingIntervalRef.current = interval;
 
       // Also update scenarios to show running state immediately
       setScenarios(prevScenarios => {
@@ -872,9 +1055,9 @@ export const TestSuiteRunsPage: React.FC = () => {
       console.error("Error triggering test run:", error);
 
       // Clean up on error
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-        setPollingInterval(null);
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
       }
       toast({
         title: "Error",
@@ -934,14 +1117,27 @@ export const TestSuiteRunsPage: React.FC = () => {
           <>
             {/* Header */}
             <div className="flex items-center justify-between mt-4">
-              <div className="flex items-center gap-3">
-                <Button variant="ghost" size="sm" onClick={() => navigate("/test-suites")} className="text-muted-foreground hover:text-foreground">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back
-                </Button>
-                <h2 className="text-2xl font-bold">{suiteInfo.name}</h2>
-              </div>
-              <div className="flex gap-3">
+                <div className="flex items-center gap-3">
+                  <Button variant="ghost" size="sm" onClick={() => navigate("/test-suites")} className="text-muted-foreground hover:text-foreground">
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back
+                  </Button>
+                <div className="flex flex-col">
+                  <h2 className="text-2xl font-bold">{suiteInfo.name}</h2>
+                  {suiteInfo.application_url && (
+                    <a 
+                      href={suiteInfo.application_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-sm text-muted-foreground hover:text-foreground mt-1 flex items-center gap-1"
+                    >
+                      <ExternalLink className="h-3 w-3" />
+                      {suiteInfo.application_url}
+                    </a>
+                  )}
+                </div>
+                </div>
+                <div className="flex gap-3">
                   <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)} className="rounded-lg">
                     <Share2 className="h-4 w-4 mr-2" />
                     Share
@@ -1186,39 +1382,39 @@ export const TestSuiteRunsPage: React.FC = () => {
                         {scenario.hasRun ? (
                           <div className="space-y-2">
                             {[...scenario.steps].sort((a, b) => a.id - b.id).map((step, index) => (
-                              <div
-                                key={step.id}
-                                className={cn(
-                                  "flex items-start gap-3 p-3 rounded transition-all cursor-pointer",
-                                  'bg-muted/30 hover:bg-muted/50'
-                                )}
-                                onClick={() => {
-                                  setSelectedStepIndex(index);
-                                  // Reset screenshot carousel when selecting a new step
-                                  const sortedSteps = [...scenario.steps].sort((a, b) => a.id - b.id);
-                                  const stepsWithScreenshots = sortedSteps.filter(
-                                    s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
-                                  );
-                                  const newIndex = stepsWithScreenshots.findIndex(s => s.id === step.id);
-                                  if (newIndex >= 0) {
-                                    setCurrentScreenshotIndex(newIndex);
-                                  }
-                                }}
-                              >
-                                <div className="flex-shrink-0 mt-0.5">
-                                  {getStatusIcon(step.status)}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium">
-                                    {step.action}
-                                  </p>
-                                  {step.reasoning && (
-                                    <p className="text-xs text-muted-foreground mt-2 italic">
-                                      {step.reasoning}
-                                    </p>
+                                <div
+                                  key={step.id}
+                                  className={cn(
+                                    "flex items-start gap-3 p-3 rounded transition-all cursor-pointer",
+                                    selectedStepIndex === index ? 'bg-muted/50' : 'bg-muted/30 hover:bg-muted/50'
                                   )}
+                                  onClick={() => {
+                                      setSelectedStepIndex(index);
+                                      // Reset screenshot carousel when selecting a new step
+                                      const sortedSteps = [...scenario.steps].sort((a, b) => a.id - b.id);
+                                      const stepsWithScreenshots = sortedSteps.filter(
+                                        s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
+                                      );
+                                      const newIndex = stepsWithScreenshots.findIndex(s => s.id === step.id);
+                                      if (newIndex >= 0) {
+                                        setCurrentScreenshotIndex(newIndex);
+                                    }
+                                  }}
+                                >
+                                  <div className="flex-shrink-0 mt-0.5">
+                                  {getStatusIcon(step.status)}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium">
+                                      {step.action}
+                                    </p>
+                                  {step.reasoning && (
+                                      <p className="text-xs text-muted-foreground mt-2 italic">
+                                        {step.reasoning}
+                                      </p>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
                             ))}
                           </div>
                         ) : (
@@ -1307,9 +1503,18 @@ export const TestSuiteRunsPage: React.FC = () => {
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => setCurrentScreenshotIndex(prev =>
-                                        prev > 0 ? prev - 1 : stepsWithScreenshots.length - 1
-                                      )}
+                                      onClick={() => {
+                                        const newIndex = currentScreenshotIndex > 0 ? currentScreenshotIndex - 1 : stepsWithScreenshots.length - 1;
+                                        setCurrentScreenshotIndex(newIndex);
+                                        // Sync selectedStepIndex with the current screenshot step
+                                        const currentStep = stepsWithScreenshots[newIndex];
+                                        if (currentStep) {
+                                          const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
+                                          if (actualStepIndex >= 0) {
+                                            setSelectedStepIndex(actualStepIndex);
+                                          }
+                                        }
+                                      }}
                                       className="h-8 w-8 p-0"
                                     >
                                       <ChevronLeft className="h-4 w-4" />
@@ -1320,9 +1525,18 @@ export const TestSuiteRunsPage: React.FC = () => {
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => setCurrentScreenshotIndex(prev =>
-                                        prev < stepsWithScreenshots.length - 1 ? prev + 1 : 0
-                                      )}
+                                      onClick={() => {
+                                        const newIndex = currentScreenshotIndex < stepsWithScreenshots.length - 1 ? currentScreenshotIndex + 1 : 0;
+                                        setCurrentScreenshotIndex(newIndex);
+                                        // Sync selectedStepIndex with the current screenshot step
+                                        const currentStep = stepsWithScreenshots[newIndex];
+                                        if (currentStep) {
+                                          const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
+                                          if (actualStepIndex >= 0) {
+                                            setSelectedStepIndex(actualStepIndex);
+                                          }
+                                        }
+                                      }}
                                       className="h-8 w-8 p-0"
                                     >
                                       <ChevronRight className="h-4 w-4" />
@@ -1404,7 +1618,17 @@ export const TestSuiteRunsPage: React.FC = () => {
                                   {stepsWithScreenshots.map((_, idx) => (
                                     <button
                                       key={idx}
-                                      onClick={() => setCurrentScreenshotIndex(idx)}
+                                      onClick={() => {
+                                        setCurrentScreenshotIndex(idx);
+                                        // Sync selectedStepIndex with the current screenshot step
+                                        const currentStep = stepsWithScreenshots[idx];
+                                        if (currentStep) {
+                                          const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
+                                          if (actualStepIndex >= 0) {
+                                            setSelectedStepIndex(actualStepIndex);
+                                          }
+                                        }
+                                      }}
                                       className={cn(
                                         "h-2 rounded-full transition-all",
                                         idx === currentScreenshotIndex
@@ -1457,9 +1681,25 @@ export const TestSuiteRunsPage: React.FC = () => {
                             <TabsContent value="console" className="mt-0">
                               <div className="bg-muted/30 rounded-lg p-4 min-h-[200px] max-h-[400px] overflow-y-auto font-mono text-xs">
                                 {(() => {
-                                  const stepsToShow = showAllLogs
-                                    ? selectedScenarioData.steps.filter(s => s.consoleLogs && Array.isArray(s.consoleLogs) && s.consoleLogs.length > 0)
-                                    : selectedScenarioData.steps.filter((s, idx) => idx === selectedStepIndex && s.consoleLogs && Array.isArray(s.consoleLogs) && s.consoleLogs.length > 0);
+                                  const stepsWithScreenshots = selectedScenarioData.steps.filter(
+                                    s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
+                                  );
+                                  
+                                  let stepsToShow: Step[];
+                                  if (showAllLogs) {
+                                    stepsToShow = selectedScenarioData.steps.filter(s => s.consoleLogs && Array.isArray(s.consoleLogs) && s.consoleLogs.length > 0);
+                                  } else {
+                                    // Show logs for the step corresponding to the current screenshot
+                                    const currentStep = stepsWithScreenshots[currentScreenshotIndex];
+                                    if (currentStep) {
+                                      const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
+                                      stepsToShow = actualStepIndex >= 0 && selectedScenarioData.steps[actualStepIndex].consoleLogs && Array.isArray(selectedScenarioData.steps[actualStepIndex].consoleLogs) && selectedScenarioData.steps[actualStepIndex].consoleLogs!.length > 0
+                                        ? [selectedScenarioData.steps[actualStepIndex]]
+                                        : [];
+                                    } else {
+                                      stepsToShow = [];
+                                    }
+                                  }
 
                                   if (stepsToShow.length === 0) {
                                     return <p className="text-muted-foreground">No console logs available</p>;
@@ -1474,7 +1714,7 @@ export const TestSuiteRunsPage: React.FC = () => {
                                           Step {actualIndex + 1}: {step.action}
                                         </p>
                                         {logs.length > 0 ? (
-                                          logs.map((log, i) => {
+                                          logs.map((log: any, i: number) => {
                                             // Handle structured log objects
                                             if (typeof log === 'object' && log !== null) {
                                               const logObj = log as any;
@@ -1512,9 +1752,25 @@ export const TestSuiteRunsPage: React.FC = () => {
                             <TabsContent value="network" className="mt-0">
                               <div className="bg-muted/30 rounded-lg p-4 min-h-[200px] max-h-[400px] overflow-y-auto font-mono text-xs">
                                 {(() => {
-                                  const stepsToShow = showAllLogs
-                                    ? selectedScenarioData.steps.filter(s => s.networkLogs && Array.isArray(s.networkLogs) && s.networkLogs.length > 0)
-                                    : selectedScenarioData.steps.filter((s, idx) => idx === selectedStepIndex && s.networkLogs && Array.isArray(s.networkLogs) && s.networkLogs.length > 0);
+                                  const stepsWithScreenshots = selectedScenarioData.steps.filter(
+                                    s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
+                                  );
+                                  
+                                  let stepsToShow: Step[];
+                                  if (showAllLogs) {
+                                    stepsToShow = selectedScenarioData.steps.filter(s => s.networkLogs && Array.isArray(s.networkLogs) && s.networkLogs.length > 0);
+                                  } else {
+                                    // Show logs for the step corresponding to the current screenshot
+                                    const currentStep = stepsWithScreenshots[currentScreenshotIndex];
+                                    if (currentStep) {
+                                      const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
+                                      stepsToShow = actualStepIndex >= 0 && selectedScenarioData.steps[actualStepIndex].networkLogs && Array.isArray(selectedScenarioData.steps[actualStepIndex].networkLogs) && selectedScenarioData.steps[actualStepIndex].networkLogs!.length > 0
+                                        ? [selectedScenarioData.steps[actualStepIndex]]
+                                        : [];
+                                    } else {
+                                      stepsToShow = [];
+                                    }
+                                  }
 
                                   if (stepsToShow.length === 0) {
                                     return <p className="text-muted-foreground">No network activity recorded</p>;
@@ -1529,7 +1785,7 @@ export const TestSuiteRunsPage: React.FC = () => {
                                           Step {actualIndex + 1}: {step.action}
                                         </p>
                                         {logs.length > 0 ? (
-                                          logs.map((log, i) => {
+                                          logs.map((log: any, i: number) => {
                                             // Handle structured network log objects
                                             if (typeof log === 'object' && log !== null) {
                                               const logObj = log as any;
