@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
@@ -41,6 +41,7 @@ interface Scenario {
 
 interface Step {
   id: number;
+  stepNumber?: number;
   action: string;
   status: "pending" | "running" | "passed" | "failed";
   reasoning?: string;
@@ -64,6 +65,8 @@ export const TestRunDetailPage: React.FC = () => {
   const [showAllLogs, setShowAllLogs] = useState(false);
   const [currentScreenshotIndex, setCurrentScreenshotIndex] = useState(0);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [expandedImageError, setExpandedImageError] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
 
   const [suiteInfo, setSuiteInfo] = useState<{ name: string; description?: string } | null>(null);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -79,19 +82,53 @@ export const TestRunDetailPage: React.FC = () => {
       return imagePath;
     }
 
-    // If it's just a filename, construct the full Google Cloud Storage URL
-    // Remove leading slash if present
-    const cleanPath = imagePath.startsWith('/') ? imagePath.slice(1) : imagePath;
+    const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    const normalized = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
 
-    // Construct full URL
+    if (normalized.startsWith('/static/')) {
+      return apiBaseUrl ? `${apiBaseUrl}${normalized}` : normalized;
+    }
+
+    if (normalized.startsWith('/images/') || normalized.startsWith('/attachments/')) {
+      const staticPath = `/static${normalized}`;
+      return apiBaseUrl ? `${apiBaseUrl}${staticPath}` : staticPath;
+    }
+
+    const cleanPath = normalized.startsWith('/') ? normalized.slice(1) : normalized;
     return `https://storage.googleapis.com/kplr-images-prod/images/${cleanPath}`;
   };
+
+  const logImageLoadError = useCallback(async (src: string, context: Record<string, unknown>) => {
+    const resolvedSrc = new URL(src, window.location.href).toString();
+    const details: Record<string, unknown> = { ...context, src: resolvedSrc };
+    try {
+      const response = await fetch(resolvedSrc, { method: "HEAD" });
+      details.status = response.status;
+      details.statusText = response.statusText;
+    } catch (error) {
+      details.error = error instanceof Error ? error.message : String(error);
+    }
+    console.warn("[image-load-failed]", details);
+  }, []);
+
+  const recordImageError = useCallback(
+    (src: string | undefined, context: Record<string, unknown>) => {
+      if (!src) return;
+      setImageErrors((prev) => (prev[src] ? prev : { ...prev, [src]: true }));
+      void logImageLoadError(src, context);
+    },
+    [logImageLoadError]
+  );
 
   useEffect(() => {
     if (runId && user) {
       loadTestRunData();
     }
   }, [runId, user]);
+
+  useEffect(() => {
+    setExpandedImageError(false);
+  }, [expandedImage]);
 
   const loadTestRunData = async () => {
     try {
@@ -223,6 +260,7 @@ export const TestRunDetailPage: React.FC = () => {
 
           return {
             id: apiStep.id,
+            stepNumber: apiStep.step_number ?? undefined,
             action: apiStep.action || apiStep.action_summary || `Step ${apiStep.step_number || apiStep.id}`,
             status: stepStatus,
             reasoning: apiStep.reasoning,
@@ -695,58 +733,70 @@ export const TestRunDetailPage: React.FC = () => {
                                         <div>
                                           <p className="text-xs text-muted-foreground mb-2">Before</p>
                                           <div className="border rounded-lg overflow-hidden bg-muted/30 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(currentStep.beforeScreenshot || null)}>
-                                            <img
-                                              src={currentStep.beforeScreenshot}
-                                              alt="Before screenshot"
-                                              className="w-full h-48 object-contain bg-white"
-                                              onError={(e) => {
-                                                const target = e.target as HTMLImageElement;
-                                                target.style.display = 'none';
-                                                const parent = target.parentElement;
-                                                if (parent) {
-                                                  parent.innerHTML = '<div class="h-48 flex items-center justify-center text-muted-foreground text-xs">Failed to load image</div>';
-                                                }
-                                              }}
-                                              loading="lazy"
-                                            />
+                                            {currentStep.beforeScreenshot && imageErrors[currentStep.beforeScreenshot] ? (
+                                              <div className="h-48 flex items-center justify-center text-muted-foreground text-xs">
+                                                Failed to load image
+                                              </div>
+                                            ) : (
+                                              <img
+                                                src={currentStep.beforeScreenshot}
+                                                alt="Before screenshot"
+                                                className="w-full h-48 object-contain bg-white"
+                                                onError={() => recordImageError(currentStep.beforeScreenshot, {
+                                                  location: "before",
+                                                  testRunId: testRun?.id,
+                                                  stepId: currentStep.id,
+                                                  stepNumber: currentStep.stepNumber,
+                                                })}
+                                                loading="lazy"
+                                              />
+                                            )}
                                           </div>
                                         </div>
                                         <div>
                                           <p className="text-xs text-muted-foreground mb-2">After</p>
                                           <div className="border rounded-lg overflow-hidden bg-muted/30 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(currentStep.afterScreenshot || null)}>
-                                            <img
-                                              src={currentStep.afterScreenshot}
-                                              alt="After screenshot"
-                                              className="w-full h-48 object-contain bg-white"
-                                              onError={(e) => {
-                                                const target = e.target as HTMLImageElement;
-                                                target.style.display = 'none';
-                                                const parent = target.parentElement;
-                                                if (parent) {
-                                                  parent.innerHTML = '<div class="h-48 flex items-center justify-center text-muted-foreground text-xs">Failed to load image</div>';
-                                                }
-                                              }}
-                                              loading="lazy"
-                                            />
+                                            {currentStep.afterScreenshot && imageErrors[currentStep.afterScreenshot] ? (
+                                              <div className="h-48 flex items-center justify-center text-muted-foreground text-xs">
+                                                Failed to load image
+                                              </div>
+                                            ) : (
+                                              <img
+                                                src={currentStep.afterScreenshot}
+                                                alt="After screenshot"
+                                                className="w-full h-48 object-contain bg-white"
+                                                onError={() => recordImageError(currentStep.afterScreenshot, {
+                                                  location: "after",
+                                                  testRunId: testRun?.id,
+                                                  stepId: currentStep.id,
+                                                  stepNumber: currentStep.stepNumber,
+                                                })}
+                                                loading="lazy"
+                                              />
+                                            )}
                                           </div>
                                         </div>
                                       </div>
                                     ) : currentStep.screenshot ? (
                                       <div className="border rounded-lg overflow-hidden bg-muted/30 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(currentStep.screenshot || null)}>
-                                        <img
-                                          src={currentStep.screenshot}
-                                          alt="Screenshot"
-                                          className="w-full h-96 object-contain bg-white"
-                                          onError={(e) => {
-                                            const target = e.target as HTMLImageElement;
-                                            target.style.display = 'none';
-                                            const parent = target.parentElement;
-                                            if (parent) {
-                                              parent.innerHTML = '<div class="h-96 flex items-center justify-center text-muted-foreground text-xs">Failed to load image</div>';
-                                            }
-                                          }}
-                                          loading="lazy"
-                                        />
+                                        {currentStep.screenshot && imageErrors[currentStep.screenshot] ? (
+                                          <div className="h-96 flex items-center justify-center text-muted-foreground text-xs">
+                                            Failed to load image
+                                          </div>
+                                        ) : (
+                                          <img
+                                            src={currentStep.screenshot}
+                                            alt="Screenshot"
+                                            className="w-full h-96 object-contain bg-white"
+                                            onError={() => recordImageError(currentStep.screenshot, {
+                                              location: "single",
+                                              testRunId: testRun?.id,
+                                              stepId: currentStep.id,
+                                              stepNumber: currentStep.stepNumber,
+                                            })}
+                                            loading="lazy"
+                                          />
+                                        )}
                                       </div>
                                     ) : (
                                       <div className="h-[300px] flex items-center justify-center text-muted-foreground border rounded-lg">
@@ -970,21 +1020,28 @@ export const TestRunDetailPage: React.FC = () => {
             {/* Expanded Image Dialog */}
             <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
               <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-2">
-                {expandedImage && (
+                <DialogHeader>
+                  <DialogTitle className="sr-only">Expanded screenshot</DialogTitle>
+                  <DialogDescription className="sr-only">
+                    Full-size preview of the selected step screenshot.
+                  </DialogDescription>
+                </DialogHeader>
+                {expandedImage && !expandedImageError && (
                   <img
                     src={expandedImage}
                     alt="Expanded screenshot"
                     className="max-w-full max-h-[90vh] object-contain rounded-lg"
                     onClick={(e) => e.stopPropagation()}
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const parent = target.parentElement;
-                      if (parent) {
-                        parent.innerHTML = '<div class="h-96 flex items-center justify-center text-muted-foreground">Failed to load image</div>';
-                      }
+                    onError={() => {
+                      setExpandedImageError(true);
+                      recordImageError(expandedImage, { location: "expanded", testRunId: testRun?.id });
                     }}
                   />
+                )}
+                {expandedImage && expandedImageError && (
+                  <div className="h-96 flex items-center justify-center text-muted-foreground">
+                    Failed to load image
+                  </div>
                 )}
               </DialogContent>
             </Dialog>
@@ -994,4 +1051,3 @@ export const TestRunDetailPage: React.FC = () => {
     </div>
   );
 };
-

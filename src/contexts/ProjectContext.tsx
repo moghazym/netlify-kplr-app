@@ -30,7 +30,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
   const [selectedProject, setSelectedProject] = useState<ProjectResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const isFetchingProjectsRef = useRef(false);
-  const lastUserIdRef = useRef<string | null>(null);
+  const lastUserIdRef = useRef<number | null>(null);
 
   const fetchProjects = async (selectProject?: ProjectResponse | null) => {
     // Prevent duplicate calls
@@ -116,4 +116,3 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
     </ProjectContext.Provider>
   );
 };
-

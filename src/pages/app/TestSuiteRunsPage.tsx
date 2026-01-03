@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Badge } from "../../components/ui/badge";
@@ -17,7 +17,6 @@ import {
   ArrowLeft,
   Loader2,
   Bug,
-  RotateCcw,
   ExternalLink,
   Copy,
   Check,
@@ -37,7 +36,7 @@ import { cn } from "../../lib/utils";
 import {
   getTestSuite,
   getScenarios,
-  triggerCloudRun,
+  triggerLiveRun,
   getTestRun,
   getLatestTestRun,
   createScenario,
@@ -56,6 +55,7 @@ interface Scenario {
 
 interface Step {
   id: number;
+  stepNumber?: number;
   action: string;
   status: "pending" | "running" | "passed" | "failed";
   reasoning?: string;
@@ -100,7 +100,18 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [runningPlatform, setRunningPlatform] = useState<"web" | "ios" | "android" | null>(null);
   const [currentScreenshotIndex, setCurrentScreenshotIndex] = useState(0);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [expandedImageError, setExpandedImageError] = useState(false);
+  const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [selectedPlatform, setSelectedPlatform] = useState<"web" | "ios" | "android">("web");
+  const [liveStreamUrl, setLiveStreamUrl] = useState<string | null>(null);
+  const [isLaunchingLiveRun, setIsLaunchingLiveRun] = useState(false);
+  const [launchingScenarioId, setLaunchingScenarioId] = useState<string | null>(null);
+  const [streamState, setStreamState] = useState<"idle" | "connecting" | "live" | "error">("idle");
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const [streamAttempt, setStreamAttempt] = useState(0);
+  const streamVideoRef = useRef<HTMLVideoElement | null>(null);
+  const streamPcRef = useRef<RTCPeerConnection | null>(null);
+  const streamRetryRef = useRef(0);
 
   // Helper function to construct full image URL from filename or path
   const getImageUrl = (imagePath: string | undefined | null): string | undefined => {
@@ -111,13 +122,43 @@ export const TestSuiteRunsPage: React.FC = () => {
       return imagePath;
     }
 
-    // If it's just a filename, construct the full Google Cloud Storage URL
-    // Remove leading slash if present
-    const cleanPath = imagePath.startsWith('/') ? imagePath.slice(1) : imagePath;
+    const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+    const normalized = imagePath.startsWith('/') ? imagePath : `/${imagePath}`;
 
-    // Construct full URL
+    if (normalized.startsWith('/static/')) {
+      return apiBaseUrl ? `${apiBaseUrl}${normalized}` : normalized;
+    }
+
+    if (normalized.startsWith('/images/') || normalized.startsWith('/attachments/')) {
+      const staticPath = `/static${normalized}`;
+      return apiBaseUrl ? `${apiBaseUrl}${staticPath}` : staticPath;
+    }
+
+    const cleanPath = normalized.startsWith('/') ? normalized.slice(1) : normalized;
     return `https://storage.googleapis.com/kplr-images-prod/images/${cleanPath}`;
   };
+
+  const logImageLoadError = useCallback(async (src: string, context: Record<string, unknown>) => {
+    const resolvedSrc = new URL(src, window.location.href).toString();
+    const details: Record<string, unknown> = { ...context, src: resolvedSrc };
+    try {
+      const response = await fetch(resolvedSrc, { method: "HEAD" });
+      details.status = response.status;
+      details.statusText = response.statusText;
+    } catch (error) {
+      details.error = error instanceof Error ? error.message : String(error);
+    }
+    console.warn("[image-load-failed]", details);
+  }, []);
+
+  const recordImageError = useCallback(
+    (src: string | undefined, context: Record<string, unknown>) => {
+      if (!src) return;
+      setImageErrors((prev) => (prev[src] ? prev : { ...prev, [src]: true }));
+      void logImageLoadError(src, context);
+    },
+    [logImageLoadError]
+  );
 
   useEffect(() => {
     if (suiteId && user) {
@@ -125,7 +166,11 @@ export const TestSuiteRunsPage: React.FC = () => {
     }
   }, [suiteId, user]);
 
-  // Reset to web if iOS/Android is selected (they're coming soon)
+  useEffect(() => {
+    setExpandedImageError(false);
+  }, [expandedImage]);
+
+  // Reset to web if iOS/Android is selected (not available yet)
   useEffect(() => {
     if (selectedPlatform === "ios" || selectedPlatform === "android") {
       setSelectedPlatform("web");
@@ -139,6 +184,10 @@ export const TestSuiteRunsPage: React.FC = () => {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }
+      if (streamPcRef.current) {
+        streamPcRef.current.close();
+        streamPcRef.current = null;
+      }
     };
   }, []);
 
@@ -151,6 +200,134 @@ export const TestSuiteRunsPage: React.FC = () => {
       setRunningPlatform(null);
     }
   }, [suiteId]);
+
+  useEffect(() => {
+    streamRetryRef.current = 0;
+  }, [liveStreamUrl]);
+
+  const waitForIceGatheringComplete = (pc: RTCPeerConnection, timeoutMs = 5000) => {
+    if (pc.iceGatheringState === "complete") {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      const timer = window.setTimeout(() => {
+        cleanup();
+        resolve();
+      }, timeoutMs);
+      const check = () => {
+        if (pc.iceGatheringState === "complete") {
+          cleanup();
+          resolve();
+        }
+      };
+      const cleanup = () => {
+        pc.removeEventListener("icegatheringstatechange", check);
+        window.clearTimeout(timer);
+      };
+      pc.addEventListener("icegatheringstatechange", check);
+    });
+  };
+
+  useEffect(() => {
+    let isActive = true;
+    let retryTimer: number | null = null;
+
+    const cleanupVideo = () => {
+      const video = streamVideoRef.current;
+      if (!video) return;
+      const stream = video.srcObject as MediaStream | null;
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+      video.srcObject = null;
+    };
+
+    const cleanupPeer = () => {
+      if (streamPcRef.current) {
+        streamPcRef.current.close();
+        streamPcRef.current = null;
+      }
+    };
+
+    const connect = async () => {
+      cleanupPeer();
+      cleanupVideo();
+      setStreamError(null);
+
+      if (!liveStreamUrl) {
+        setStreamState("idle");
+        return;
+      }
+
+      const baseUrl = liveStreamUrl.replace(/\/$/, "");
+      setStreamState("connecting");
+
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      streamPcRef.current = pc;
+      pc.addTransceiver("video", { direction: "recvonly" });
+
+      pc.ontrack = (event) => {
+        if (!isActive) return;
+        if (streamVideoRef.current) {
+          streamVideoRef.current.srcObject = event.streams[0];
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (!isActive) return;
+        if (pc.connectionState === "connected") {
+          setStreamState("live");
+        } else if (["failed", "disconnected", "closed"].includes(pc.connectionState)) {
+          setStreamState("error");
+        }
+      };
+
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await waitForIceGatheringComplete(pc, 5000);
+        const localDesc = pc.localDescription;
+        const response = await fetch(`${baseUrl}/offer`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sdp: localDesc?.sdp, type: localDesc?.type }),
+        });
+        if (!response.ok) {
+          throw new Error(`Offer failed (${response.status})`);
+        }
+        const answer = await response.json();
+        if (!isActive) return;
+        await pc.setRemoteDescription(answer);
+      } catch (error) {
+        if (!isActive) return;
+        const message = error instanceof Error ? error.message : "Failed to connect";
+        if (streamRetryRef.current < 3) {
+          streamRetryRef.current += 1;
+          retryTimer = window.setTimeout(() => {
+            if (isActive) {
+              setStreamAttempt((prev) => prev + 1);
+            }
+          }, 1000 * streamRetryRef.current);
+          return;
+        }
+        setStreamState("error");
+        setStreamError(message);
+        cleanupPeer();
+        cleanupVideo();
+      }
+    };
+
+    connect();
+
+    return () => {
+      isActive = false;
+      if (retryTimer) {
+        window.clearTimeout(retryTimer);
+      }
+      cleanupPeer();
+      cleanupVideo();
+    };
+  }, [liveStreamUrl, streamAttempt]);
 
   const loadSuiteData = async () => {
     try {
@@ -272,14 +449,21 @@ export const TestSuiteRunsPage: React.FC = () => {
     }
 
     try {
-      // Create scenario via API first
-      await createScenario({
+      if (!selectedProject) {
+        toast({
+          title: "Error",
+          description: "Project is missing",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const createdScenario = await createScenario({
         test_suite_id: suiteIdNum,
         name: newScenario.trim(),
         description: null,
       });
 
-      // Reload scenarios from API to get the latest data
       const scenariosData = await getScenarios(suiteIdNum);
       const transformedScenarios: Scenario[] = scenariosData.map(scenario => ({
         id: scenario.id.toString(),
@@ -292,65 +476,62 @@ export const TestSuiteRunsPage: React.FC = () => {
       setScenarios(transformedScenarios);
       setNewScenario("");
       setIsAddDialogOpen(false);
+      setSelectedScenario(createdScenario.id.toString());
+      setExpandedScenarioId(`scenario-${createdScenario.id}`);
+      setSelectedStepIndex(0);
+      setCurrentScreenshotIndex(0);
 
-      // Run all scenarios after adding the new one
-      await handleRunAll();
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+
+      setIsLaunchingLiveRun(true);
+      setLaunchingScenarioId(createdScenario.id.toString());
+      setRunningPlatform(selectedPlatform);
+      setShowCompletionBanner(false);
+
+      const liveRun = await triggerLiveRun({
+        project_id: selectedProject.id,
+        suite_id: suiteIdNum,
+        scenario_id: createdScenario.id,
+        platform: selectedPlatform === "android" ? "android" : "web",
+        options: {
+          max_steps: 8,
+        },
+      });
+
+      setLiveStreamUrl(liveRun.stream_url);
+      setScenarios(prevScenarios =>
+        prevScenarios.map(s =>
+          s.id === createdScenario.id.toString()
+            ? { ...s, status: "running" as const, hasRun: true }
+            : s
+        )
+      );
+
+      await pollTestRun(liveRun.test_run_id);
+      const interval = setInterval(() => {
+        pollTestRun(liveRun.test_run_id);
+      }, 5000);
+      pollingIntervalRef.current = interval;
+
+      toast({
+        title: "Scenario saved",
+        description: "Live run started",
+      });
     } catch (error) {
       console.error("Error adding scenario:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add scenario",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleSaveAsDraft = async () => {
-    if (!newScenario.trim() || !suiteId) return;
-
-    const suiteIdNum = parseInt(suiteId, 10);
-    if (isNaN(suiteIdNum)) {
-      toast({
-        title: "Error",
-        description: "Invalid test suite ID",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      // Create scenario via API
-      await createScenario({
-        test_suite_id: suiteIdNum,
-        name: newScenario.trim(),
-        description: null,
-      });
-
-      // Reload scenarios from API to get the latest data
-      const scenariosData = await getScenarios(suiteIdNum);
-      const transformedScenarios: Scenario[] = scenariosData.map(scenario => ({
-        id: scenario.id.toString(),
-        name: scenario.name,
-        status: "pending" as const,
-      hasRun: false,
-      steps: [],
-      }));
-
-      setScenarios(transformedScenarios);
-    setNewScenario("");
-    setIsAddDialogOpen(false);
-
-      toast({
-        title: "Success",
-        description: "Scenario saved as draft",
-      });
-    } catch (error) {
-      console.error("Error saving scenario:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to save scenario",
         variant: "destructive",
       });
+      setLiveStreamUrl(null);
+      setRunningPlatform(null);
+    } finally {
+      setIsLaunchingLiveRun(false);
+      setLaunchingScenarioId(null);
     }
   };
 
@@ -366,7 +547,7 @@ export const TestSuiteRunsPage: React.FC = () => {
     setEditingScenario(null);
   };
 
-  const handleRunScenario = async () => {
+  const handleRunEditedScenario = async () => {
     if (!editingScenario || !editingScenario.name.trim()) return;
     const scenarioId = editingScenario.id;
     const scenarioName = editingScenario.name;
@@ -375,8 +556,14 @@ export const TestSuiteRunsPage: React.FC = () => {
     ));
     setIsEditDialogOpen(false);
     setEditingScenario(null);
-    // Run all scenarios when editing and clicking Run Now
-    await handleRunAll();
+    const scenarioToRun = scenarios.find(s => s.id === scenarioId) || {
+      id: scenarioId,
+      name: scenarioName,
+      status: "pending" as const,
+      hasRun: false,
+      steps: [],
+    };
+    await handleRunScenario(scenarioToRun);
   };
 
   const handleDeleteScenario = async () => {
@@ -511,6 +698,7 @@ export const TestSuiteRunsPage: React.FC = () => {
 
           return {
             id: apiStep.id,
+            stepNumber: apiStep.step_number ?? undefined,
             action: apiStep.action || apiStep.action_summary || `Step ${apiStep.step_number || apiStep.id}`,
             status: stepStatus,
             reasoning: apiStep.reasoning,
@@ -700,6 +888,7 @@ export const TestSuiteRunsPage: React.FC = () => {
 
           return {
             id: apiStep.id,
+            stepNumber: apiStep.step_number ?? undefined,
             action: apiStep.action || apiStep.action_summary || `Step ${apiStep.step_number || apiStep.id}`,
             status: stepStatus,
             reasoning: apiStep.reasoning,
@@ -842,6 +1031,81 @@ export const TestSuiteRunsPage: React.FC = () => {
     }
 
     return mappedScenarios;
+  };
+
+  const handleRunScenario = async (scenario: Scenario) => {
+    if (!selectedProject || !suiteId) {
+      toast({
+        title: "Error",
+        description: "Project or suite ID is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const suiteIdNum = parseInt(suiteId, 10);
+    if (isNaN(suiteIdNum)) {
+      toast({
+        title: "Error",
+        description: "Invalid test suite ID",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+
+    try {
+      setIsLaunchingLiveRun(true);
+      setLaunchingScenarioId(scenario.id);
+      setRunningPlatform(selectedPlatform);
+      setShowCompletionBanner(false);
+
+      const liveRun = await triggerLiveRun({
+        project_id: selectedProject.id,
+        suite_id: suiteIdNum,
+        scenario_id: Number(scenario.id),
+        platform: selectedPlatform === "android" ? "android" : "web",
+        options: {
+          max_steps: 8,
+        },
+      });
+
+      setLiveStreamUrl(liveRun.stream_url);
+      setSelectedScenario(scenario.id);
+      setExpandedScenarioId(`scenario-${scenario.id}`);
+      setSelectedStepIndex(0);
+      setCurrentScreenshotIndex(0);
+
+      setScenarios(prevScenarios =>
+        prevScenarios.map(s =>
+          s.id === scenario.id
+            ? { ...s, status: "running" as const, hasRun: true }
+            : s
+        )
+      );
+
+      await pollTestRun(liveRun.test_run_id);
+      const interval = setInterval(() => {
+        pollTestRun(liveRun.test_run_id);
+      }, 5000);
+      pollingIntervalRef.current = interval;
+    } catch (error) {
+      console.error("Error running scenario:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to run scenario",
+        variant: "destructive",
+      });
+      setLiveStreamUrl(null);
+      setRunningPlatform(null);
+    } finally {
+      setIsLaunchingLiveRun(false);
+      setLaunchingScenarioId(null);
+    }
   };
 
   // Poll test run status
@@ -995,6 +1259,7 @@ export const TestSuiteRunsPage: React.FC = () => {
       pollingIntervalRef.current = null;
     }
 
+    setIsLaunchingLiveRun(true);
     setIsRunningAll(prev => ({ ...prev, [selectedPlatform]: true }));
     setRunningPlatform(selectedPlatform);
     setShowCompletionBanner(false);
@@ -1006,7 +1271,7 @@ export const TestSuiteRunsPage: React.FC = () => {
       }
 
       // Call trigger API
-      const triggerResponse = await triggerCloudRun({
+      const triggerResponse = await triggerLiveRun({
         project_id: selectedProject.id,
         suite_id: suiteIdNum,
         platform: selectedPlatform === "web" ? "web" : selectedPlatform,
@@ -1016,6 +1281,7 @@ export const TestSuiteRunsPage: React.FC = () => {
       });
 
       const testRunId = triggerResponse.test_run_id;
+      setLiveStreamUrl(triggerResponse.stream_url);
 
       // Initial poll
       await pollTestRun(testRunId);
@@ -1059,6 +1325,7 @@ export const TestSuiteRunsPage: React.FC = () => {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }
+      setLiveStreamUrl(null);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to trigger test run",
@@ -1074,6 +1341,8 @@ export const TestSuiteRunsPage: React.FC = () => {
           status: s.hasRun ? s.status : "pending" as const,
         }))
       );
+    } finally {
+      setIsLaunchingLiveRun(false);
     }
   };
 
@@ -1145,7 +1414,13 @@ export const TestSuiteRunsPage: React.FC = () => {
                   <Button
                     size="sm"
                     onClick={handleRunAll}
-                    disabled={isRunningAll[selectedPlatform] || scenarios.length === 0 || selectedPlatform === "ios" || selectedPlatform === "android"}
+                    disabled={
+                      isRunningAll[selectedPlatform] ||
+                      runningPlatform === selectedPlatform ||
+                      scenarios.length === 0 ||
+                      selectedPlatform === "ios" ||
+                      selectedPlatform === "android"
+                    }
                     className="bg-orange-500 hover:bg-orange-600 text-white rounded-lg"
                   >
                     {isRunningAll[selectedPlatform] ? (
@@ -1251,29 +1526,40 @@ export const TestSuiteRunsPage: React.FC = () => {
                   value={expandedScenarioId}
                   onValueChange={setExpandedScenarioId}
                 >
-                  {scenarios.map((scenario) => (
-                    <AccordionItem
-                      key={scenario.id}
-                      value={`scenario-${scenario.id}`}
-                      className="!border rounded-lg overflow-hidden"
-                    >
-                      <AccordionTrigger
-                        className="px-4 hover:no-underline"
-                        onClick={() => {
-                          setSelectedScenario(scenario.id);
-                          // Reset screenshot carousel when selecting a scenario
-                          setCurrentScreenshotIndex(0);
-                          setSelectedStepIndex(0);
-                        }}
+                  {scenarios.map((scenario) => {
+                    const isScenarioLaunching = launchingScenarioId === scenario.id;
+                    const isScenarioRunning = scenario.status === "running" || isScenarioLaunching;
+                    const isScenarioDisabled =
+                      isRunningAll[selectedPlatform] ||
+                      (runningPlatform === selectedPlatform && !isScenarioRunning) ||
+                      (isLaunchingLiveRun && !isScenarioLaunching);
+
+                    return (
+                      <AccordionItem
+                        key={scenario.id}
+                        value={`scenario-${scenario.id}`}
+                        className="!border rounded-lg overflow-hidden"
                       >
-                        <div className="flex items-start gap-3 text-left flex-1 min-w-0 mr-2">
-                          <div className="flex-shrink-0 pt-0.5">
-                            {getStatusIcon(scenario.status, "large")}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <span className="text-sm font-medium break-words block">{scenario.name}</span>
-                          </div>
-                          <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center gap-2">
+                          <AccordionTrigger
+                            className="px-4 hover:no-underline flex-1"
+                            onClick={() => {
+                              setSelectedScenario(scenario.id);
+                              // Reset screenshot carousel when selecting a scenario
+                              setCurrentScreenshotIndex(0);
+                              setSelectedStepIndex(0);
+                            }}
+                          >
+                            <div className="flex items-start gap-3 text-left flex-1 min-w-0">
+                              <div className="flex-shrink-0 pt-0.5">
+                                {getStatusIcon(scenario.status, "large")}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-sm font-medium break-words block">{scenario.name}</span>
+                              </div>
+                            </div>
+                          </AccordionTrigger>
+                          <div className="flex items-center gap-2 pr-4">
                             <TooltipProvider>
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1281,8 +1567,7 @@ export const TestSuiteRunsPage: React.FC = () => {
                                     size="sm"
                                     variant="ghost"
                                     className="h-7 w-7 p-0"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
+                                    onClick={() => {
                                       setEditingScenario({ id: scenario.id, name: scenario.name });
                                       setIsEditDialogOpen(true);
                                     }}
@@ -1303,8 +1588,7 @@ export const TestSuiteRunsPage: React.FC = () => {
                                     size="sm"
                                     variant="ghost"
                                     className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
+                                    onClick={() => {
                                       setDeletingScenario({ id: scenario.id, name: scenario.name });
                                       setIsDeleteDialogOpen(true);
                                     }}
@@ -1337,114 +1621,87 @@ export const TestSuiteRunsPage: React.FC = () => {
                               </TooltipProvider>
                             )}
 
-                            {scenario.hasRun ? (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger className="inline-flex">
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 w-7 p-0 opacity-50 cursor-not-allowed"
-                                      disabled
-                                    >
-                                      <RotateCcw className="h-3 w-3" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Coming Soon</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            ) : (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger className="inline-flex">
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 px-2 opacity-50 cursor-not-allowed"
-                                      disabled
-                                    >
-                                      <Play className="h-3 w-3 mr-1" />
-                                      Run
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Coming Soon</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 px-2"
+                              disabled={isScenarioDisabled}
+                              onClick={() => {
+                                handleRunScenario(scenario);
+                              }}
+                            >
+                              {isScenarioRunning ? (
+                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              ) : (
+                                <Play className="h-3 w-3 mr-1" />
+                              )}
+                              {isScenarioRunning ? "Running" : "Run"}
+                            </Button>
                           </div>
                         </div>
-                      </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        {scenario.hasRun ? (
-                          <div className="space-y-2">
-                            {[...scenario.steps].sort((a, b) => a.id - b.id).map((step, index) => (
-                                <div
-                                  key={step.id}
-                                  className={cn(
-                                    "flex items-start gap-3 p-3 rounded transition-all cursor-pointer",
-                                    selectedStepIndex === index ? 'bg-muted/50' : 'bg-muted/30 hover:bg-muted/50'
-                                  )}
-                                  onClick={() => {
-                                      setSelectedStepIndex(index);
-                                      // Reset screenshot carousel when selecting a new step
-                                      const sortedSteps = [...scenario.steps].sort((a, b) => a.id - b.id);
-                                      const stepsWithScreenshots = sortedSteps.filter(
-                                        s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
-                                      );
-                                      const newIndex = stepsWithScreenshots.findIndex(s => s.id === step.id);
-                                      if (newIndex >= 0) {
-                                        setCurrentScreenshotIndex(newIndex);
-                                    }
-                                  }}
-                                >
-                                  <div className="flex-shrink-0 mt-0.5">
-                                  {getStatusIcon(step.status)}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium">
-                                      {step.action}
-                                    </p>
-                                  {step.reasoning && (
-                                      <p className="text-xs text-muted-foreground mt-2 italic">
-                                        {step.reasoning}
-                                      </p>
+                        <AccordionContent className="px-4 pb-4">
+                          {scenario.hasRun ? (
+                            <div className="space-y-2">
+                              {[...scenario.steps].sort((a, b) => a.id - b.id).map((step, index) => (
+                                  <div
+                                    key={step.id}
+                                    className={cn(
+                                      "flex items-start gap-3 p-3 rounded transition-all cursor-pointer",
+                                      selectedStepIndex === index ? 'bg-muted/50' : 'bg-muted/30 hover:bg-muted/50'
                                     )}
-                                  </div>
-                                </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="bg-muted/30 rounded-lg p-6 text-center mt-2">
-                            <p className="text-sm text-muted-foreground mb-3">
-                              This scenario hasn't been executed yet
-                            </p>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="default"
-                                    disabled
-                                    className="opacity-50 cursor-not-allowed"
+                                    onClick={() => {
+                                        setSelectedStepIndex(index);
+                                        // Reset screenshot carousel when selecting a new step
+                                        const sortedSteps = [...scenario.steps].sort((a, b) => a.id - b.id);
+                                        const stepsWithScreenshots = sortedSteps.filter(
+                                          s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
+                                        );
+                                        const newIndex = stepsWithScreenshots.findIndex(s => s.id === step.id);
+                                        if (newIndex >= 0) {
+                                          setCurrentScreenshotIndex(newIndex);
+                                      }
+                                    }}
                                   >
-                                    <Play className="h-4 w-4 mr-2" />
-                                    Run Scenario
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Coming Soon</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                        )}
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
+                                    <div className="flex-shrink-0 mt-0.5">
+                                    {getStatusIcon(step.status)}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-sm font-medium">
+                                        {step.action}
+                                      </p>
+                                    {step.reasoning && (
+                                        <p className="text-xs text-muted-foreground mt-2 italic">
+                                          {step.reasoning}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="bg-muted/30 rounded-lg p-6 text-center mt-2">
+                              <p className="text-sm text-muted-foreground mb-3">
+                                This scenario hasn't been executed yet
+                              </p>
+                              <Button
+                                size="sm"
+                                variant="default"
+                                disabled={isScenarioDisabled}
+                                onClick={() => handleRunScenario(scenario)}
+                              >
+                                {isScenarioRunning ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Play className="h-4 w-4 mr-2" />
+                                )}
+                                {isScenarioRunning ? "Running" : "Run Scenario"}
+                              </Button>
+                            </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
                 </Accordion>
 
                 <Button
@@ -1458,6 +1715,90 @@ export const TestSuiteRunsPage: React.FC = () => {
 
               {/* Right Column - Details */}
               <div className="space-y-4">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="text-base">Live Execution</CardTitle>
+                    {streamState === "live" ? (
+                      <Badge variant="outline" className="flex items-center gap-1 text-green-600">
+                        <span className="h-2 w-2 rounded-full bg-green-500" />
+                        Live
+                      </Badge>
+                    ) : streamState === "connecting" ? (
+                      <Badge variant="outline" className="text-amber-600">Connecting</Badge>
+                    ) : liveStreamUrl ? (
+                      <Badge variant="outline" className="text-red-600">Disconnected</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">Idle</Badge>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    {isLaunchingLiveRun ? (
+                      <div className="h-[220px] flex items-center justify-center text-muted-foreground gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Launching live run...
+                      </div>
+                    ) : liveStreamUrl ? (
+                      <div className="space-y-3">
+                        <div className="border rounded-lg overflow-hidden bg-black/90 relative">
+                          <video
+                            ref={streamVideoRef}
+                            className="w-full h-[260px] object-contain"
+                            autoPlay
+                            playsInline
+                            muted
+                          />
+                          {streamState !== "live" && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm gap-2">
+                              {streamState === "connecting" ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Connecting to WebRTC...
+                                </>
+                              ) : (
+                                <>
+                                  <span>{streamError || "Stream disconnected"}</span>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={() => {
+                                      streamRetryRef.current = 0;
+                                      setStreamAttempt((prev) => prev + 1);
+                                    }}
+                                  >
+                                    Retry
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(liveStreamUrl, "_blank")}
+                          >
+                            Open in new tab
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              streamRetryRef.current = 0;
+                              setStreamAttempt((prev) => prev + 1);
+                            }}
+                          >
+                            Reconnect
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-[220px] flex items-center justify-center text-muted-foreground">
+                        Run a scenario to start a live session.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
                 {selectedScenarioData ? (
                   <>
                     {/* Screenshots */}
@@ -1552,58 +1893,70 @@ export const TestSuiteRunsPage: React.FC = () => {
                                     <div>
                                       <p className="text-xs text-muted-foreground mb-2">Before</p>
                                       <div className="border rounded-lg overflow-hidden bg-muted/30 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(currentStep.beforeScreenshot || null)}>
-                                        <img
-                                          src={currentStep.beforeScreenshot}
-                                          alt="Before screenshot"
-                                          className="w-full h-48 object-contain bg-white"
-                                          onError={(e) => {
-                                            const target = e.target as HTMLImageElement;
-                                            target.style.display = 'none';
-                                            const parent = target.parentElement;
-                                            if (parent) {
-                                              parent.innerHTML = '<div class="h-48 flex items-center justify-center text-muted-foreground text-xs">Failed to load image</div>';
-                                            }
-                                          }}
-                                          loading="lazy"
-                                        />
+                                        {currentStep.beforeScreenshot && imageErrors[currentStep.beforeScreenshot] ? (
+                                          <div className="h-48 flex items-center justify-center text-muted-foreground text-xs">
+                                            Failed to load image
+                                          </div>
+                                        ) : (
+                                          <img
+                                            src={currentStep.beforeScreenshot}
+                                            alt="Before screenshot"
+                                            className="w-full h-48 object-contain bg-white"
+                                            onError={() => recordImageError(currentStep.beforeScreenshot, {
+                                              location: "before",
+                                              scenarioId: selectedScenarioData.id,
+                                              stepId: currentStep.id,
+                                              stepNumber: currentStep.stepNumber,
+                                            })}
+                                            loading="lazy"
+                                          />
+                                        )}
                                       </div>
                                     </div>
                                     <div>
                                       <p className="text-xs text-muted-foreground mb-2">After</p>
                                       <div className="border rounded-lg overflow-hidden bg-muted/30 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(currentStep.afterScreenshot || null)}>
-                                        <img
-                                          src={currentStep.afterScreenshot}
-                                          alt="After screenshot"
-                                          className="w-full h-48 object-contain bg-white"
-                                          onError={(e) => {
-                                            const target = e.target as HTMLImageElement;
-                                            target.style.display = 'none';
-                                            const parent = target.parentElement;
-                                            if (parent) {
-                                              parent.innerHTML = '<div class="h-48 flex items-center justify-center text-muted-foreground text-xs">Failed to load image</div>';
-                                            }
-                                          }}
-                                          loading="lazy"
-                                        />
+                                        {currentStep.afterScreenshot && imageErrors[currentStep.afterScreenshot] ? (
+                                          <div className="h-48 flex items-center justify-center text-muted-foreground text-xs">
+                                            Failed to load image
+                                          </div>
+                                        ) : (
+                                          <img
+                                            src={currentStep.afterScreenshot}
+                                            alt="After screenshot"
+                                            className="w-full h-48 object-contain bg-white"
+                                            onError={() => recordImageError(currentStep.afterScreenshot, {
+                                              location: "after",
+                                              scenarioId: selectedScenarioData.id,
+                                              stepId: currentStep.id,
+                                              stepNumber: currentStep.stepNumber,
+                                            })}
+                                            loading="lazy"
+                                          />
+                                        )}
                                       </div>
                                     </div>
                                   </div>
                                 ) : currentStep.screenshot ? (
                                   <div className="border rounded-lg overflow-hidden bg-muted/30 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(currentStep.screenshot || null)}>
-                                    <img
-                                      src={currentStep.screenshot}
-                                      alt="Screenshot"
-                                      className="w-full h-96 object-contain bg-white"
-                                      onError={(e) => {
-                                        const target = e.target as HTMLImageElement;
-                                        target.style.display = 'none';
-                                        const parent = target.parentElement;
-                                        if (parent) {
-                                          parent.innerHTML = '<div class="h-96 flex items-center justify-center text-muted-foreground text-xs">Failed to load image</div>';
-                                        }
-                                      }}
-                                      loading="lazy"
-                                    />
+                                    {currentStep.screenshot && imageErrors[currentStep.screenshot] ? (
+                                      <div className="h-96 flex items-center justify-center text-muted-foreground text-xs">
+                                        Failed to load image
+                                      </div>
+                                    ) : (
+                                      <img
+                                        src={currentStep.screenshot}
+                                        alt="Screenshot"
+                                        className="w-full h-96 object-contain bg-white"
+                                        onError={() => recordImageError(currentStep.screenshot, {
+                                          location: "single",
+                                          scenarioId: selectedScenarioData.id,
+                                          stepId: currentStep.id,
+                                          stepNumber: currentStep.stepNumber,
+                                        })}
+                                        loading="lazy"
+                                      />
+                                    )}
                                   </div>
                                 ) : (
                                   <div className="h-[300px] flex items-center justify-center text-muted-foreground border rounded-lg">
@@ -1845,7 +2198,7 @@ export const TestSuiteRunsPage: React.FC = () => {
                 <DialogHeader>
                   <DialogTitle>Add New Test Scenario</DialogTitle>
                   <DialogDescription>
-                    Describe the test scenario. Save as draft to run later, or run immediately to see AI execute steps in real-time.
+                    Describe the test scenario. We'll save it and start a live run so you can watch it execute.
                   </DialogDescription>
                 </DialogHeader>
                 <Textarea
@@ -1859,15 +2212,16 @@ export const TestSuiteRunsPage: React.FC = () => {
                     Cancel
                   </Button>
                   <Button
-                    variant="secondary"
-                    onClick={handleSaveAsDraft}
-                    disabled={!newScenario.trim()}
+                    onClick={handleAddScenario}
+                    disabled={!newScenario.trim() || isLaunchingLiveRun}
+                    className="bg-orange-500 hover:bg-orange-600 text-white"
                   >
-                    Save as Draft
-                  </Button>
-                  <Button onClick={handleAddScenario} disabled={!newScenario.trim()} className="bg-orange-500 hover:bg-orange-600 text-white">
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Run Now
+                    {isLaunchingLiveRun ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-2" />
+                    )}
+                    Save Scenario
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -1879,7 +2233,7 @@ export const TestSuiteRunsPage: React.FC = () => {
                 <DialogHeader>
                   <DialogTitle>Edit Test Scenario</DialogTitle>
                   <DialogDescription>
-                    Update the scenario description and choose to save as draft or run immediately.
+                    Update the scenario description or run it immediately.
                   </DialogDescription>
                 </DialogHeader>
                 <Textarea
@@ -1903,10 +2257,10 @@ export const TestSuiteRunsPage: React.FC = () => {
                     onClick={handleEditScenario}
                     disabled={!editingScenario?.name.trim()}
                   >
-                    Save as Draft
+                    Save Scenario
                   </Button>
                   <Button
-                    onClick={handleRunScenario}
+                    onClick={handleRunEditedScenario}
                     disabled={!editingScenario?.name.trim()}
                     className="bg-orange-500 hover:bg-orange-600 text-white"
                   >
@@ -1991,21 +2345,28 @@ export const TestSuiteRunsPage: React.FC = () => {
             {/* Expanded Image Dialog */}
             <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
               <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-2">
-                {expandedImage && (
+                <DialogHeader>
+                  <DialogTitle className="sr-only">Expanded screenshot</DialogTitle>
+                  <DialogDescription className="sr-only">
+                    Full-size preview of the selected step screenshot.
+                  </DialogDescription>
+                </DialogHeader>
+                {expandedImage && !expandedImageError && (
                   <img
                     src={expandedImage}
                     alt="Expanded screenshot"
                     className="max-w-full max-h-[90vh] object-contain rounded-lg"
                     onClick={(e) => e.stopPropagation()}
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const parent = target.parentElement;
-                      if (parent) {
-                        parent.innerHTML = '<div class="h-96 flex items-center justify-center text-muted-foreground">Failed to load image</div>';
-                      }
+                    onError={() => {
+                      setExpandedImageError(true);
+                      recordImageError(expandedImage, { location: "expanded" });
                     }}
                   />
+                )}
+                {expandedImage && expandedImageError && (
+                  <div className="h-96 flex items-center justify-center text-muted-foreground">
+                    Failed to load image
+                  </div>
                 )}
               </DialogContent>
             </Dialog>
@@ -2014,4 +2375,3 @@ export const TestSuiteRunsPage: React.FC = () => {
     </div>
   );
 };
-

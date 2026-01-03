@@ -1,5 +1,5 @@
 /**
- * API Client for making authenticated requests
+ * API Client for making requests
  */
 
 import {
@@ -39,8 +39,6 @@ import {
   mockCompleteMobileAppBuild,
   mockDeleteMobileAppBuild,
 } from './mock-api';
-import { clearUserFromStorage } from './auth-storage';
-import { redirectToAuth } from './auth-redirect';
 
 // Get the API base URL from environment variable or use a default
 // In development, we use the Vite proxy, so we leave this empty to use relative URLs
@@ -48,7 +46,7 @@ import { redirectToAuth } from './auth-redirect';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
 /**
- * Make an authenticated API request
+ * Make an API request
  */
 export const apiRequest = async <T = any>(
   endpoint: string,
@@ -63,27 +61,17 @@ export const apiRequest = async <T = any>(
     ...(options.headers as Record<string, string>),
   };
 
+  const storedToken =
+    localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
+  if (storedToken && !headers.Authorization) {
+    headers.Authorization = `Bearer ${storedToken}`;
+  }
+
   const isFormData =
     typeof FormData !== 'undefined' && options.body instanceof FormData;
 
   if (!isFormData && options.body && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
-  }
-
-  // Add Authorization header if we have a token
-  // For localhost, we rely on tokens stored in localStorage/sessionStorage from checkUrlForAuth()
-  // For production, we use cookies (which are automatically sent with credentials: 'include')
-  // Skip auth token requirement when using mock API
-  if (typeof window !== 'undefined' && !shouldUseMockApi()) {
-    const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
-    if (token && !headers['Authorization']) {
-      headers['Authorization'] = `Bearer ${token}`;
-      if (import.meta.env.DEV) {
-        console.log('[API] Using token from storage for Authorization header');
-      }
-    } else if (import.meta.env.DEV && !token) {
-      console.warn('[API] No token found in storage for request to:', endpoint);
-    }
   }
 
   // In development, use the Vite proxy (relative URL)
@@ -126,41 +114,6 @@ export const apiRequest = async <T = any>(
 
     // Handle single detail string or message
     const errorMessage = errorData.detail || errorData.message || `HTTP ${response.status}: ${response.statusText}`;
-    
-    // Check for credential validation error and trigger re-authentication
-    // This handles both the specific error message and 401 Unauthorized status
-    // Skip auth redirect when using mock API
-    const isCredentialError = (typeof errorMessage === 'string' && 
-        errorMessage.toLowerCase().includes('could not validate credentials')) ||
-        response.status === 401;
-    
-    if (isCredentialError && !shouldUseMockApi()) {
-      console.warn('[API] Credential validation failed, triggering re-authentication', {
-        status: response.status,
-        errorMessage,
-      });
-      
-      // Clear auth state
-      clearUserFromStorage();
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('access_token');
-        sessionStorage.removeItem('access_token');
-      }
-      
-      // Only redirect if we're not already on the callback or auth page
-      if (typeof window !== 'undefined') {
-        const currentPath = window.location.pathname;
-        if (currentPath !== '/callback' && !currentPath.includes('/auth')) {
-          // Store the current path to redirect back after auth
-          // Default to dashboard if we're on the root
-          const redirectPath = currentPath === '/' ? '/dashboard' : currentPath;
-          sessionStorage.setItem('auth_redirect_path', redirectPath);
-          
-          // Trigger authentication flow
-          redirectToAuth(redirectPath);
-        }
-      }
-    }
     
     throw new Error(errorMessage);
   }
@@ -1019,24 +972,28 @@ export const createTestRun = async (data: TestRunCreate): Promise<TestRunRespons
   return apiPost<TestRunResponse>('/api/test-runs/', data);
 };
 
-export interface CloudRunTriggerRequest {
+export interface LiveRunTriggerRequest {
   project_id: number;
   suite_id: number;
   scenario_id?: number;
-  schedule_id?: string;
-  platform?: string;
+  platform?: "web" | "ios" | "android" | "workspace";
   options?: { max_steps?: number };
+  ttl_seconds?: number;
+  resolution?: string;
+  client_interaction?: "enabled" | "disabled";
 }
 
-export interface CloudRunTriggerResponse {
+export interface LiveRunTriggerResponse {
   status: string;
   schedule_id: string;
   message_id: string;
   test_run_id: number;
+  pod_instance_id: string;
+  stream_url: string;
 }
 
-export const triggerCloudRun = async (data: CloudRunTriggerRequest): Promise<CloudRunTriggerResponse> => {
-  return apiPost<CloudRunTriggerResponse>('/api/cloud-run/trigger', data);
+export const triggerLiveRun = async (data: LiveRunTriggerRequest): Promise<LiveRunTriggerResponse> => {
+  return apiPost<LiveRunTriggerResponse>('/api/live-runs/trigger', data);
 };
 
 /**
