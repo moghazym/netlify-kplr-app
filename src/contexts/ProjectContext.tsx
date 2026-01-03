@@ -85,7 +85,7 @@ export const ProjectProvider: React.FC<ProjectProviderProps> = ({ children }) =>
 
   useEffect(() => {
     // Only fetch if user changed (not on every render)
-    const userId = user?.id || null;
+    const userId = user?.id != null ? Number(user.id) : null;
     if (userId !== lastUserIdRef.current) {
       lastUserIdRef.current = userId;
       fetchProjects();
