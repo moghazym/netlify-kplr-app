@@ -9,6 +9,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ProjectProvider } from "./contexts/ProjectContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AppLayout } from "./components/app/AppLayout";
+import AuthPage from "./pages/auth/AuthPage";
 import { DashboardPage } from "./pages/app/DashboardPage";
 import { TestSuitesPage } from "./pages/app/TestSuitesPage";
 import { TestSuiteRunsPage } from "./pages/app/TestSuiteRunsPage";
@@ -28,7 +29,7 @@ function App() {
       <ProjectProvider>
         <Router>
         <Routes>
-          {/* Callback route should not be protected - it handles its own auth flow */}
+          <Route path="/login" element={<AuthPage />} />
           <Route path="/callback" element={<AuthCallbackPage />} />
           <Route
             element={

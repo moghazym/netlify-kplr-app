@@ -1,20 +1,28 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getUserFromStorage, saveUserToStorage, clearUserFromStorage, checkUrlForAuth } from '../lib/auth-storage';
-import { apiGet } from '../lib/api-client';
-import { shouldUseMockApi } from '../lib/mock-api';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
+import { apiRequest } from '@/lib/api-client';
 
 interface User {
-  id: string;
-  name: string;
+  id: number;
+  username: string;
+  full_name?: string | null;
   email: string;
-  picture?: string;
+  avatar_url?: string | null;
+}
+
+interface RegisterPayload {
+  email: string;
+  username: string;
+  full_name?: string;
+  password: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   login: (userData: User) => void;
-  logout: () => void;
+  loginWithPassword: (email: string, password: string) => Promise<void>;
+  registerWithPassword: (payload: RegisterPayload) => Promise<void>;
+  logout: () => Promise<void>;
   loading: boolean;
 }
 
@@ -32,123 +40,73 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-const logAuth = (...args: any[]) => {
-  if (import.meta.env.DEV) {
-    console.log('%c[AuthContext]', 'color:#8b5cf6;font-weight:bold;', ...args);
-  } else {
-    console.log('[AuthContext]', ...args);
-  }
-};
-
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  // Initialize user from storage synchronously to avoid race conditions
-  const getInitialUser = (): User | null => {
-    // Check for auth token in URL (e.g., after OAuth redirect)
-
-    // In production, check for auth token
-    if (typeof window !== 'undefined') {
-      const foundAuth = checkUrlForAuth();
-      logAuth('Checked URL for auth payload', { foundAuth });
-    }
-    const restored = getUserFromStorage();
-    if (restored) {
-      logAuth('Restored cached user from storage', restored);
-    }
-    return restored;
-  };
-
-  const [user, setUser] = useState<User | null>(getInitialUser);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let isMounted = true;
-    const initAuth = async () => {
-      // In dev mode with mock API, automatically set a mock user
-      if (shouldUseMockApi()) {
-        logAuth('Using mock API - setting mock user for development');
-        const mockUser: User = {
-          id: '1',
-          name: 'Dev User',
-          email: 'dev@example.com',
-          picture: undefined,
-        };
-        if (isMounted) {
-          saveUserToStorage(mockUser);
-          setUser(mockUser);
-          setLoading(false);
-          logAuth('Mock user set for development', mockUser);
-        }
-        return;
-      }
-
-      try {
-        // Check if we have a token before making the API call
-        const token = localStorage.getItem('access_token') || sessionStorage.getItem('access_token');
-        logAuth('Token in storage:', token ? `${token.substring(0, 20)}...` : 'NO TOKEN');
-
-        logAuth('Fetching /api/auth/me for session hydration');
-        const me = await apiGet<User>('/api/auth/me');
-        if (me && isMounted) {
-          saveUserToStorage(me);
-          setUser(me);
-          logAuth('Hydrated authenticated user from backend', me);
-        }
-      } catch (err) {
-        logAuth('Failed to hydrate session - will redirect to auth', err);
-
-        // Check if we have cached user data
-        const cachedUser = getUserFromStorage();
-        if (cachedUser) {
-          logAuth('⚠️ API call failed but found cached user, clearing it:', cachedUser);
-        }
-
-        if (isMounted) {
-          setUser(null);
-          clearUserFromStorage();
-          // Don't redirect here - let ProtectedRoute handle it
-        }
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
-    initAuth();
-    return () => { isMounted = false; };
+  const refreshUser = useCallback(async () => {
+    try {
+      const me = await apiRequest<User>('/api/auth/me');
+      setUser(me);
+      return me;
+    } catch {
+      setUser(null);
+      return null;
+    }
   }, []);
 
-  const login = (userData: User) => {
-    logAuth('login() invoked', userData);
+  useEffect(() => {
+    refreshUser().finally(() => setLoading(false));
+  }, [refreshUser]);
+
+  const login = useCallback((userData: User) => {
     setUser(userData);
-    saveUserToStorage(userData);
-  };
+  }, []);
 
-  const logout = async () => {
-    logAuth('logout() invoked');
-    // Set a flag to prevent ProtectedRoute from redirecting during logout
-    sessionStorage.setItem('logout_in_progress', 'true');
-    
-    try {
-      await fetch(`${import.meta.env.VITE_API_BASE_URL || ''}/api/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch (error) {
-      console.error('[AuthContext] Logout failed', error);
-    } finally {
-      setUser(null);
-      clearUserFromStorage();
-      logAuth('Local session cleared');
-      // Redirect to usekplr.com after logout - use replace to prevent back navigation
-      window.location.replace('https://usekplr.com');
+  const loginWithPassword = useCallback(async (email: string, password: string) => {
+    const tokenResponse = await apiRequest<{ access_token: string }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (tokenResponse?.access_token) {
+      localStorage.setItem('access_token', tokenResponse.access_token);
+      sessionStorage.setItem('access_token', tokenResponse.access_token);
     }
-  };
 
-  const value: AuthContextType = {
+    await refreshUser();
+  }, [refreshUser]);
+
+  const registerWithPassword = useCallback(async (payload: RegisterPayload) => {
+    await apiRequest('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+
+    await loginWithPassword(payload.email, payload.password);
+  }, [loginWithPassword]);
+
+  const logout = useCallback(async () => {
+    try {
+      await apiRequest('/api/auth/logout', { method: 'POST' });
+    } catch {
+      // Ignore logout errors; we still clear local state.
+    }
+
+    localStorage.removeItem('access_token');
+    sessionStorage.removeItem('access_token');
+    setUser(null);
+  }, []);
+
+  const value = useMemo<AuthContextType>(() => ({
     user,
-    isAuthenticated: !!user,
+    isAuthenticated: Boolean(user),
     login,
+    loginWithPassword,
+    registerWithPassword,
     logout,
     loading,
-  };
+  }), [user, login, loginWithPassword, registerWithPassword, logout, loading]);
 
   return (
     <AuthContext.Provider value={value}>
