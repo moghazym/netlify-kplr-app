@@ -24,6 +24,7 @@ import {
   type TestSuiteCreate
 } from "@/lib/api-client";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { DEFAULT_RESOLUTION, RESOLUTION_OPTIONS } from "@/lib/resolutions";
 
 export default function CreateTestSuitePage() {
   const navigate = useNavigate();
@@ -39,7 +40,7 @@ export default function CreateTestSuitePage() {
     description: null,
     application_url: null,
     ai_testing_instructions: null,
-    resolution: "Desktop Standard",
+    resolution: DEFAULT_RESOLUTION,
     creation_mode: "manual",
     preconditions_enabled: false,
     preconditions: null,
@@ -146,7 +147,7 @@ export default function CreateTestSuitePage() {
         description: formData.description?.trim() || null,
         application_url: formData.application_url?.trim() || null,
         ai_testing_instructions: formData.ai_testing_instructions?.trim() || null,
-        resolution: formData.resolution || "Desktop Standard",
+        resolution: formData.resolution || DEFAULT_RESOLUTION,
         creation_mode: formData.creation_mode || "manual",
         preconditions_enabled: formData.preconditions_enabled ?? false,
         preconditions: formData.preconditions || null,
@@ -275,7 +276,7 @@ export default function CreateTestSuitePage() {
         description: formData.description?.trim() || null,
         application_url: formData.application_url?.trim() || null,
         ai_testing_instructions: formData.ai_testing_instructions?.trim() || null,
-        resolution: formData.resolution || "Desktop Standard",
+        resolution: formData.resolution || DEFAULT_RESOLUTION,
         creation_mode: formData.creation_mode || "manual",
         preconditions_enabled: formData.preconditions_enabled ?? false,
         preconditions: formData.preconditions || null,
@@ -378,7 +379,7 @@ export default function CreateTestSuitePage() {
         description: formData.description?.trim() || null,
         application_url: formData.application_url?.trim() || null,
         ai_testing_instructions: null, // Manual mode doesn't use AI instructions
-        resolution: formData.resolution || "Desktop Standard",
+        resolution: formData.resolution || DEFAULT_RESOLUTION,
         creation_mode: "manual",
         preconditions_enabled: formData.preconditions_enabled ?? false,
         preconditions: formData.preconditions || null,
@@ -496,7 +497,7 @@ export default function CreateTestSuitePage() {
                   <div>
                     <Label htmlFor="resolution">Screen Resolution</Label>
                     <Select
-                      value={formData.resolution || "Desktop Standard"}
+                      value={formData.resolution || DEFAULT_RESOLUTION}
                       onValueChange={(value) => 
                         setFormData({ ...formData, resolution: value })
                       }
@@ -505,11 +506,11 @@ export default function CreateTestSuitePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Desktop Standard">Desktop Standard (1920x1080)</SelectItem>
-                        <SelectItem value="Desktop Large">Desktop Large (2560x1440)</SelectItem>
-                        <SelectItem value="Laptop">Laptop (1366x768)</SelectItem>
-                        <SelectItem value="Tablet">Tablet (768x1024)</SelectItem>
-                        <SelectItem value="Mobile">Mobile (375x667)</SelectItem>
+                        {RESOLUTION_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label} ({option.value})
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -703,7 +704,7 @@ export default function CreateTestSuitePage() {
                   <div>
                     <Label htmlFor="resolution">Screen Resolution</Label>
                     <Select
-                      value={formData.resolution || "Desktop Standard"}
+                      value={formData.resolution || DEFAULT_RESOLUTION}
                       onValueChange={(value) => 
                         setFormData({ ...formData, resolution: value })
                       }
@@ -712,11 +713,11 @@ export default function CreateTestSuitePage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Desktop Standard">Desktop Standard (1920x1080)</SelectItem>
-                        <SelectItem value="Desktop Large">Desktop Large (2560x1440)</SelectItem>
-                        <SelectItem value="Laptop">Laptop (1366x768)</SelectItem>
-                        <SelectItem value="Tablet">Tablet (768x1024)</SelectItem>
-                        <SelectItem value="Mobile">Mobile (375x667)</SelectItem>
+                        {RESOLUTION_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label} ({option.value})
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -854,4 +855,3 @@ export default function CreateTestSuitePage() {
     </div>
   );
 }
-

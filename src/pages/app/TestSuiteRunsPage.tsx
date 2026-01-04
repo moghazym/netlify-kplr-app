@@ -46,6 +46,7 @@ import {
   WebrtcIceServer
 } from "../../lib/api-client";
 import { useToast } from "../../hooks/use-toast";
+import { normalizeResolution } from "../../lib/resolutions";
 
 interface Scenario {
   id: string;
@@ -95,7 +96,12 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [showCompletionBanner, setShowCompletionBanner] = useState(false);
   const [lastRunStats, setLastRunStats] = useState<{ passed: number; failed: number; total: number } | null>(null);
 
-  const [suiteInfo, setSuiteInfo] = useState<{ name: string; description?: string; application_url?: string | null } | null>(null);
+  const [suiteInfo, setSuiteInfo] = useState<{
+    name: string;
+    description?: string;
+    application_url?: string | null;
+    resolution?: string | null;
+  } | null>(null);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -463,6 +469,7 @@ export const TestSuiteRunsPage: React.FC = () => {
         name: suiteData.name,
         description: suiteData.description || undefined,
         application_url: suiteData.application_url || undefined,
+        resolution: suiteData.resolution || undefined,
       });
 
       // If there's a latest test run, load its full details and map to scenarios
@@ -602,11 +609,13 @@ export const TestSuiteRunsPage: React.FC = () => {
       setRunningPlatform(selectedPlatform);
       setShowCompletionBanner(false);
 
+      const suiteResolution = normalizeResolution(suiteInfo?.resolution);
       const liveRun = await triggerLiveRun({
         project_id: selectedProject.id,
         suite_id: suiteIdNum,
         scenario_id: createdScenario.id,
         platform: selectedPlatform === "android" ? "android" : "web",
+        resolution: suiteResolution || undefined,
         options: {
           max_steps: 8,
         },
@@ -1175,11 +1184,13 @@ export const TestSuiteRunsPage: React.FC = () => {
       setRunningPlatform(selectedPlatform);
       setShowCompletionBanner(false);
 
+      const suiteResolution = normalizeResolution(suiteInfo?.resolution);
       const liveRun = await triggerLiveRun({
         project_id: selectedProject.id,
         suite_id: suiteIdNum,
         scenario_id: Number(scenario.id),
         platform: selectedPlatform === "android" ? "android" : "web",
+        resolution: suiteResolution || undefined,
         options: {
           max_steps: 8,
         },
@@ -1382,10 +1393,12 @@ export const TestSuiteRunsPage: React.FC = () => {
       }
 
       // Call trigger API
+      const suiteResolution = normalizeResolution(suiteInfo?.resolution);
       const triggerResponse = await triggerLiveRun({
         project_id: selectedProject.id,
         suite_id: suiteIdNum,
         platform: selectedPlatform === "web" ? "web" : selectedPlatform,
+        resolution: suiteResolution || undefined,
         options: {
           max_steps: 8,
         },
