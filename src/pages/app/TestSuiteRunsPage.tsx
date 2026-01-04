@@ -243,12 +243,15 @@ export const TestSuiteRunsPage: React.FC = () => {
       video.srcObject = null;
     };
 
-    const cleanupPeer = () => {
-      if (streamPcRef.current) {
-        streamPcRef.current.close();
-        streamPcRef.current = null;
-      }
-    };
+      const cleanupPeer = () => {
+        if (streamPcRef.current) {
+          streamPcRef.current.close();
+          streamPcRef.current = null;
+        }
+        if (statsTimer) {
+          window.clearInterval(statsTimer);
+        }
+      };
 
     const connect = async () => {
       cleanupPeer();
@@ -267,15 +270,61 @@ export const TestSuiteRunsPage: React.FC = () => {
       streamPcRef.current = pc;
       pc.addTransceiver("video", { direction: "recvonly" });
 
+      const streamLogPrefix = "[stream]";
       pc.ontrack = (event) => {
         if (!isActive) return;
+        console.log(streamLogPrefix, "track received", event.track.kind, event.streams);
         if (streamVideoRef.current) {
           streamVideoRef.current.srcObject = event.streams[0];
         }
       };
 
+      pc.onicecandidate = (event) => {
+        if (!isActive) return;
+        if (event.candidate) {
+          console.log(streamLogPrefix, "ice candidate", event.candidate.candidate);
+        } else {
+          console.log(streamLogPrefix, "ice gathering complete");
+        }
+      };
+
+      pc.onicegatheringstatechange = () => {
+        if (!isActive) return;
+        console.log(streamLogPrefix, "iceGatheringState", pc.iceGatheringState);
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        if (!isActive) return;
+        console.log(streamLogPrefix, "iceConnectionState", pc.iceConnectionState);
+      };
+
+      pc.onsignalingstatechange = () => {
+        if (!isActive) return;
+        console.log(streamLogPrefix, "signalingState", pc.signalingState);
+      };
+
+      const statsTimer = window.setInterval(async () => {
+        if (!isActive) return;
+        try {
+          const stats = await pc.getStats();
+          stats.forEach((report) => {
+            if (report.type === "inbound-rtp" && report.kind === "video") {
+              console.log(streamLogPrefix, "stats", {
+                framesDecoded: report.framesDecoded,
+                framesReceived: report.framesReceived,
+                packetsReceived: report.packetsReceived,
+                jitter: report.jitter,
+              });
+            }
+          });
+        } catch (err) {
+          console.log(streamLogPrefix, "stats error", err);
+        }
+      }, 5000);
+
       pc.onconnectionstatechange = () => {
         if (!isActive) return;
+        console.log(streamLogPrefix, "connectionState", pc.connectionState);
         if (pc.connectionState === "connected") {
           setStreamState("live");
         } else if (["failed", "disconnected", "closed"].includes(pc.connectionState)) {
