@@ -112,6 +112,7 @@ export const TestSuiteRunsPage: React.FC = () => {
   const streamVideoRef = useRef<HTMLVideoElement | null>(null);
   const streamPcRef = useRef<RTCPeerConnection | null>(null);
   const streamRetryRef = useRef(0);
+  const streamSelectedPairRef = useRef<string | null>(null);
   const MAX_STREAM_RETRIES = 6;
 
   // Helper function to construct full image URL from filename or path
@@ -265,6 +266,9 @@ export const TestSuiteRunsPage: React.FC = () => {
 
       const baseUrl = liveStreamUrl.replace(/\/$/, "");
       setStreamState("connecting");
+      const attemptId = streamAttempt + 1;
+      const connectStartedAt = performance.now();
+      console.log(streamLogPrefix, "attempt", attemptId, "url", baseUrl);
 
       const pc = new RTCPeerConnection({ iceServers: [] });
       streamPcRef.current = pc;
@@ -307,7 +311,11 @@ export const TestSuiteRunsPage: React.FC = () => {
         if (!isActive) return;
         try {
           const stats = await pc.getStats();
+          let selectedPairId: string | null = null;
           stats.forEach((report) => {
+            if (report.type === "transport" && report.selectedCandidatePairId) {
+              selectedPairId = report.selectedCandidatePairId as string;
+            }
             if (report.type === "inbound-rtp" && report.kind === "video") {
               console.log(streamLogPrefix, "stats", {
                 framesDecoded: report.framesDecoded,
@@ -317,6 +325,19 @@ export const TestSuiteRunsPage: React.FC = () => {
               });
             }
           });
+          if (selectedPairId && streamSelectedPairRef.current !== selectedPairId) {
+            streamSelectedPairRef.current = selectedPairId;
+            const selected = stats.get(selectedPairId);
+            if (selected && selected.type === "candidate-pair") {
+              const local = stats.get(selected.localCandidateId);
+              const remote = stats.get(selected.remoteCandidateId);
+              console.log(streamLogPrefix, "selected pair", {
+                local: local ? `${local.protocol} ${local.candidateType} ${local.ip}:${local.port}` : null,
+                remote: remote ? `${remote.protocol} ${remote.candidateType} ${remote.ip}:${remote.port}` : null,
+                state: selected.state,
+              });
+            }
+          }
         } catch (err) {
           console.log(streamLogPrefix, "stats error", err);
         }
@@ -327,6 +348,8 @@ export const TestSuiteRunsPage: React.FC = () => {
         console.log(streamLogPrefix, "connectionState", pc.connectionState);
         if (pc.connectionState === "connected") {
           setStreamState("live");
+          const connectedMs = Math.round(performance.now() - connectStartedAt);
+          console.log(streamLogPrefix, "connected in", connectedMs, "ms");
         } else if (["failed", "disconnected", "closed"].includes(pc.connectionState)) {
           setStreamState("error");
         }
@@ -337,12 +360,20 @@ export const TestSuiteRunsPage: React.FC = () => {
         await pc.setLocalDescription(offer);
         await waitForIceGatheringComplete(pc, 5000);
         const localDesc = pc.localDescription;
-        const response = await fetch(`${baseUrl}/offer`, {
+        const offerUrl = `${baseUrl}/offer`;
+        const response = await fetch(offerUrl, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ sdp: localDesc?.sdp, type: localDesc?.type }),
         });
         if (!response.ok) {
+          let responseBody = "";
+          try {
+            responseBody = await response.text();
+          } catch (err) {
+            responseBody = "failed to read body";
+          }
+          console.log(streamLogPrefix, "offer failed", response.status, responseBody);
           throw new Error(`Offer failed (${response.status})`);
         }
         const answer = await response.json();
@@ -356,6 +387,7 @@ export const TestSuiteRunsPage: React.FC = () => {
           const backoffMs = Math.min(1000 * 2 ** (streamRetryRef.current - 1), 10000);
           setStreamState("connecting");
           setStreamError(null);
+          console.log(streamLogPrefix, "retrying in", backoffMs, "ms", "reason", message);
           retryTimer = window.setTimeout(() => {
             if (isActive) {
               setStreamAttempt((prev) => prev + 1);
