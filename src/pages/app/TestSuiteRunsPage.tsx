@@ -233,6 +233,7 @@ export const TestSuiteRunsPage: React.FC = () => {
   useEffect(() => {
     let isActive = true;
     let retryTimer: number | null = null;
+    let statsTimer: number | null = null;
 
     const cleanupVideo = () => {
       const video = streamVideoRef.current;
@@ -244,15 +245,16 @@ export const TestSuiteRunsPage: React.FC = () => {
       video.srcObject = null;
     };
 
-      const cleanupPeer = () => {
-        if (streamPcRef.current) {
-          streamPcRef.current.close();
-          streamPcRef.current = null;
-        }
-        if (statsTimer) {
-          window.clearInterval(statsTimer);
-        }
-      };
+    const cleanupPeer = () => {
+      if (streamPcRef.current) {
+        streamPcRef.current.close();
+        streamPcRef.current = null;
+      }
+      if (statsTimer) {
+        window.clearInterval(statsTimer);
+        statsTimer = null;
+      }
+    };
 
     const connect = async () => {
       cleanupPeer();
@@ -265,6 +267,7 @@ export const TestSuiteRunsPage: React.FC = () => {
       }
 
       const baseUrl = liveStreamUrl.replace(/\/$/, "");
+      const streamLogPrefix = "[stream]";
       setStreamState("connecting");
       const attemptId = streamAttempt + 1;
       const connectStartedAt = performance.now();
@@ -274,7 +277,6 @@ export const TestSuiteRunsPage: React.FC = () => {
       streamPcRef.current = pc;
       pc.addTransceiver("video", { direction: "recvonly" });
 
-      const streamLogPrefix = "[stream]";
       pc.ontrack = (event) => {
         if (!isActive) return;
         console.log(streamLogPrefix, "track received", event.track.kind, event.streams);
@@ -307,7 +309,7 @@ export const TestSuiteRunsPage: React.FC = () => {
         console.log(streamLogPrefix, "signalingState", pc.signalingState);
       };
 
-      const statsTimer = window.setInterval(async () => {
+      statsTimer = window.setInterval(async () => {
         if (!isActive) return;
         try {
           const stats = await pc.getStats();
