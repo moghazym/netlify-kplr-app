@@ -41,7 +41,9 @@ import {
   getLatestTestRun,
   createScenario,
   deleteScenario,
-  TestRunWithSessionsResponse
+  getWebrtcIceServers,
+  TestRunWithSessionsResponse,
+  WebrtcIceServer
 } from "../../lib/api-client";
 import { useToast } from "../../hooks/use-toast";
 
@@ -113,6 +115,8 @@ export const TestSuiteRunsPage: React.FC = () => {
   const streamPcRef = useRef<RTCPeerConnection | null>(null);
   const streamRetryRef = useRef(0);
   const streamSelectedPairRef = useRef<string | null>(null);
+  const streamIceServersRef = useRef<{ servers: WebrtcIceServer[]; fetchedAt: number } | null>(null);
+  const ICE_SERVERS_TTL_MS = 4 * 60 * 1000;
   const MAX_STREAM_RETRIES = 6;
 
   // Helper function to construct full image URL from filename or path
@@ -205,6 +209,8 @@ export const TestSuiteRunsPage: React.FC = () => {
 
   useEffect(() => {
     streamRetryRef.current = 0;
+    streamIceServersRef.current = null;
+    streamSelectedPairRef.current = null;
   }, [liveStreamUrl]);
 
   const waitForIceGatheringComplete = (pc: RTCPeerConnection, timeoutMs = 5000) => {
@@ -273,7 +279,25 @@ export const TestSuiteRunsPage: React.FC = () => {
       const connectStartedAt = performance.now();
       console.log(streamLogPrefix, "attempt", attemptId, "url", baseUrl);
 
-      const pc = new RTCPeerConnection({ iceServers: [] });
+      let iceServers: WebrtcIceServer[] = [];
+      const now = Date.now();
+      if (
+        streamIceServersRef.current
+        && now - streamIceServersRef.current.fetchedAt < ICE_SERVERS_TTL_MS
+      ) {
+        iceServers = streamIceServersRef.current.servers;
+      } else {
+        try {
+          const response = await getWebrtcIceServers();
+          iceServers = response.iceServers || [];
+          streamIceServersRef.current = { servers: iceServers, fetchedAt: now };
+        } catch (err) {
+          console.log(streamLogPrefix, "ice servers fetch failed", err);
+        }
+      }
+      console.log(streamLogPrefix, "ice servers", iceServers.length);
+
+      const pc = new RTCPeerConnection({ iceServers });
       streamPcRef.current = pc;
       pc.addTransceiver("video", { direction: "recvonly" });
 

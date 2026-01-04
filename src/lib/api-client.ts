@@ -996,6 +996,21 @@ export const triggerLiveRun = async (data: LiveRunTriggerRequest): Promise<LiveR
   return apiPost<LiveRunTriggerResponse>('/api/live-runs/trigger', data);
 };
 
+export interface WebrtcIceServer {
+  urls: string | string[];
+  username?: string;
+  credential?: string;
+  credentialType?: string;
+}
+
+export interface WebrtcIceServersResponse {
+  iceServers: WebrtcIceServer[];
+}
+
+export const getWebrtcIceServers = async (): Promise<WebrtcIceServersResponse> => {
+  return apiGet<WebrtcIceServersResponse>('/api/webrtc/ice-servers');
+};
+
 /**
  * Update a test run
  */
