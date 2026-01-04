@@ -112,6 +112,7 @@ export const TestSuiteRunsPage: React.FC = () => {
   const streamVideoRef = useRef<HTMLVideoElement | null>(null);
   const streamPcRef = useRef<RTCPeerConnection | null>(null);
   const streamRetryRef = useRef(0);
+  const MAX_STREAM_RETRIES = 6;
 
   // Helper function to construct full image URL from filename or path
   const getImageUrl = (imagePath: string | undefined | null): string | undefined => {
@@ -301,13 +302,16 @@ export const TestSuiteRunsPage: React.FC = () => {
       } catch (error) {
         if (!isActive) return;
         const message = error instanceof Error ? error.message : "Failed to connect";
-        if (streamRetryRef.current < 3) {
+        if (streamRetryRef.current < MAX_STREAM_RETRIES) {
           streamRetryRef.current += 1;
+          const backoffMs = Math.min(1000 * 2 ** (streamRetryRef.current - 1), 10000);
+          setStreamState("connecting");
+          setStreamError(null);
           retryTimer = window.setTimeout(() => {
             if (isActive) {
               setStreamAttempt((prev) => prev + 1);
             }
-          }, 1000 * streamRetryRef.current);
+          }, backoffMs);
           return;
         }
         setStreamState("error");
@@ -1752,7 +1756,9 @@ export const TestSuiteRunsPage: React.FC = () => {
                               {streamState === "connecting" ? (
                                 <>
                                   <Loader2 className="h-4 w-4 animate-spin" />
-                                  Connecting to WebRTC...
+                                  {streamRetryRef.current > 0
+                                    ? `Starting stream... (${streamRetryRef.current}/${MAX_STREAM_RETRIES})`
+                                    : "Connecting to WebRTC..."}
                                 </>
                               ) : (
                                 <>
