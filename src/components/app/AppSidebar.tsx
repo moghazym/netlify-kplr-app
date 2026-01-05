@@ -45,7 +45,7 @@ const menuItems = [
   { title: "Scheduler", url: "/scheduler", icon: Calendar },
   { title: "Usage & Billing", url: "/pricing", icon: CreditCard },
   { title: "Secrets & Variables", url: "/secrets", icon: Key },
-  { title: "App Registry", url: "/app-registry", icon: Smartphone, comingSoon: true },
+  { title: "App Registry", url: "/app-registry", icon: Smartphone },
   { title: "Integrations", url: "/integrations", icon: Settings, comingSoon: true },
 ];
 
@@ -305,4 +305,3 @@ export function AppSidebar() {
     </>
   );
 }
-
