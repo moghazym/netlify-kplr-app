@@ -124,6 +124,7 @@ export const TestSuiteRunsPage: React.FC = () => {
   const streamIceServersRef = useRef<{ servers: WebrtcIceServer[]; fetchedAt: number } | null>(null);
   const ICE_SERVERS_TTL_MS = 4 * 60 * 1000;
   const MAX_STREAM_RETRIES = 6;
+  const isAndroid = selectedPlatform === "android";
 
   // Helper function to construct full image URL from filename or path
   const getImageUrl = (imagePath: string | undefined | null): string | undefined => {
@@ -182,9 +183,9 @@ export const TestSuiteRunsPage: React.FC = () => {
     setExpandedImageError(false);
   }, [expandedImage]);
 
-  // Reset to web if iOS/Android is selected (not available yet)
+  // Reset to web if iOS is selected (not available yet)
   useEffect(() => {
-    if (selectedPlatform === "ios" || selectedPlatform === "android") {
+    if (selectedPlatform === "ios") {
       setSelectedPlatform("web");
     }
   }, [selectedPlatform]);
@@ -275,6 +276,11 @@ export const TestSuiteRunsPage: React.FC = () => {
 
       if (!liveStreamUrl) {
         setStreamState("idle");
+        return;
+      }
+
+      if (selectedPlatform !== "web") {
+        setStreamState("live");
         return;
       }
 
@@ -444,7 +450,7 @@ export const TestSuiteRunsPage: React.FC = () => {
       cleanupPeer();
       cleanupVideo();
     };
-  }, [liveStreamUrl, streamAttempt]);
+  }, [liveStreamUrl, streamAttempt, selectedPlatform]);
 
   const loadSuiteData = async () => {
     try {
@@ -1542,8 +1548,7 @@ export const TestSuiteRunsPage: React.FC = () => {
                       isRunningAll[selectedPlatform] ||
                       runningPlatform === selectedPlatform ||
                       scenarios.length === 0 ||
-                      selectedPlatform === "ios" ||
-                      selectedPlatform === "android"
+                      selectedPlatform === "ios"
                     }
                     className="bg-orange-500 hover:bg-orange-600 text-white rounded-lg"
                   >
@@ -1596,17 +1601,15 @@ export const TestSuiteRunsPage: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setSelectedPlatform("android")}
-                    disabled={true}
                     className={cn(
                       "flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm font-medium flex-1",
                       selectedPlatform === "android"
                         ? "bg-muted text-foreground"
                         : "bg-transparent text-muted-foreground hover:text-foreground",
-                      "opacity-50 cursor-not-allowed"
                     )}
                   >
                     <Smartphone className={cn("h-3.5 w-3.5", selectedPlatform === "android" ? "text-blue-500" : "text-muted-foreground")} />
-                    <span>Android (Coming Soon)</span>
+                    <span>Android</span>
                   </button>
                 </div>
               </CardContent>
@@ -1864,38 +1867,50 @@ export const TestSuiteRunsPage: React.FC = () => {
                     ) : liveStreamUrl ? (
                       <div className="space-y-3">
                         <div className="border rounded-lg overflow-hidden bg-black/90 relative">
-                          <video
-                            ref={streamVideoRef}
-                            className="w-full h-[260px] object-contain"
-                            autoPlay
-                            playsInline
-                            muted
-                          />
-                          {streamState !== "live" && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm gap-2">
-                              {streamState === "connecting" ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  {streamRetryRef.current > 0
-                                    ? `Starting stream... (${streamRetryRef.current}/${MAX_STREAM_RETRIES})`
-                                    : "Connecting to WebRTC..."}
-                                </>
-                              ) : (
-                                <>
-                                  <span>{streamError || "Stream disconnected"}</span>
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => {
-                                      streamRetryRef.current = 0;
-                                      setStreamAttempt((prev) => prev + 1);
-                                    }}
-                                  >
-                                    Retry
-                                  </Button>
-                                </>
+                          {isAndroid ? (
+                            <iframe
+                              title="Android Stream"
+                              src={liveStreamUrl}
+                              className="w-full h-[260px] bg-black"
+                              allow="autoplay; fullscreen"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <>
+                              <video
+                                ref={streamVideoRef}
+                                className="w-full h-[260px] object-contain"
+                                autoPlay
+                                playsInline
+                                muted
+                              />
+                              {streamState !== "live" && (
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm gap-2">
+                                  {streamState === "connecting" ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      {streamRetryRef.current > 0
+                                        ? `Starting stream... (${streamRetryRef.current}/${MAX_STREAM_RETRIES})`
+                                        : "Connecting to WebRTC..."}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span>{streamError || "Stream disconnected"}</span>
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => {
+                                          streamRetryRef.current = 0;
+                                          setStreamAttempt((prev) => prev + 1);
+                                        }}
+                                      >
+                                        Retry
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
                               )}
-                            </div>
+                            </>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
