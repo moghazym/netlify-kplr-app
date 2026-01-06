@@ -111,11 +111,13 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [expandedImageError, setExpandedImageError] = useState(false);
   const [imageErrors, setImageErrors] = useState<Record<string, boolean>>({});
   const [selectedPlatform, setSelectedPlatform] = useState<"web" | "ios" | "android">("web");
-  const [liveStreamUrl, setLiveStreamUrl] = useState<string | null>(null);
+  const [webStreamUrl, setWebStreamUrl] = useState<string | null>(null);
+
+  const [androidStreamUrl, setAndroidStreamUrl] = useState<string | null>(null);
+
   const [isLaunchingLiveRun, setIsLaunchingLiveRun] = useState(false);
   const [launchingScenarioId, setLaunchingScenarioId] = useState<string | null>(null);
   const [streamState, setStreamState] = useState<"idle" | "connecting" | "live" | "error">("idle");
-  const [streamError, setStreamError] = useState<string | null>(null);
   const [streamAttempt, setStreamAttempt] = useState(0);
   const streamVideoRef = useRef<HTMLVideoElement | null>(null);
   const streamPcRef = useRef<RTCPeerConnection | null>(null);
@@ -124,7 +126,9 @@ export const TestSuiteRunsPage: React.FC = () => {
   const streamIceServersRef = useRef<{ servers: WebrtcIceServer[]; fetchedAt: number } | null>(null);
   const ICE_SERVERS_TTL_MS = 4 * 60 * 1000;
   const MAX_STREAM_RETRIES = 6;
-  
+    const activeStreamUrl =
+  selectedPlatform === "android" ? androidStreamUrl : webStreamUrl;
+
 
   // Helper function to construct full image URL from filename or path
   const getImageUrl = (imagePath: string | undefined | null): string | undefined => {
@@ -218,7 +222,7 @@ export const TestSuiteRunsPage: React.FC = () => {
     streamRetryRef.current = 0;
     streamIceServersRef.current = null;
     streamSelectedPairRef.current = null;
-  }, [liveStreamUrl]);
+  }, [activeStreamUrl]);
 
   const waitForIceGatheringComplete = (pc: RTCPeerConnection, timeoutMs = 5000) => {
     if (pc.iceGatheringState === "complete") {
@@ -275,14 +279,13 @@ export const TestSuiteRunsPage: React.FC = () => {
     const connect = async () => {
       cleanupPeer();
       cleanupVideo();
-      setStreamError(null);
 
-      if (!liveStreamUrl) {
+      if (!activeStreamUrl) {
         setStreamState("idle");
         return;
       }
 
-      const baseUrl = liveStreamUrl.replace(/\/$/, "");
+      const baseUrl = activeStreamUrl.replace(/\/$/, "");
       const streamLogPrefix = "[stream]";
       setStreamState("connecting");
       const attemptId = streamAttempt + 1;
@@ -422,7 +425,6 @@ export const TestSuiteRunsPage: React.FC = () => {
           streamRetryRef.current += 1;
           const backoffMs = Math.min(1000 * 2 ** (streamRetryRef.current - 1), 10000);
           setStreamState("connecting");
-          setStreamError(null);
           console.log(streamLogPrefix, "retrying in", backoffMs, "ms", "reason", message);
           retryTimer = window.setTimeout(() => {
             if (isActive) {
@@ -432,7 +434,6 @@ export const TestSuiteRunsPage: React.FC = () => {
           return;
         }
         setStreamState("error");
-        setStreamError(message);
         cleanupPeer();
         cleanupVideo();
       }
@@ -448,17 +449,18 @@ export const TestSuiteRunsPage: React.FC = () => {
       cleanupPeer();
       cleanupVideo();
     };
-  }, [liveStreamUrl, streamAttempt, selectedPlatform]);
+  }, [activeStreamUrl, streamAttempt, selectedPlatform]);
 
-  // Android-only simple effect: treat presence of a liveStreamUrl as live
-  useEffect(() => {
-    if (selectedPlatform !== "android") return;
-    if (liveStreamUrl) {
-      setStreamState("live");
-    } else {
-      setStreamState("idle");
-    }
-  }, [liveStreamUrl, selectedPlatform]);
+  // Android-only simple effect: treat presence of a activeStreamUrl as live
+useEffect(() => {
+  if (selectedPlatform !== "android") return;
+  if (androidStreamUrl) {
+    setStreamState("live");
+  } else {
+    setStreamState("idle");
+  }
+}, [androidStreamUrl, selectedPlatform]);
+
 
   const loadSuiteData = async () => {
     try {
@@ -635,7 +637,11 @@ export const TestSuiteRunsPage: React.FC = () => {
         },
       });
 
-      setLiveStreamUrl(liveRun.stream_url);
+      if (selectedPlatform === "android") {
+        setAndroidStreamUrl(liveRun.stream_url);
+      } else {
+        setWebStreamUrl(liveRun.stream_url);
+      }
       setScenarios(prevScenarios =>
         prevScenarios.map(s =>
           s.id === createdScenario.id.toString()
@@ -661,7 +667,8 @@ export const TestSuiteRunsPage: React.FC = () => {
         description: error instanceof Error ? error.message : "Failed to save scenario",
         variant: "destructive",
       });
-      setLiveStreamUrl(null);
+      setWebStreamUrl(null);
+setAndroidStreamUrl(null);
       setRunningPlatform(null);
     } finally {
       setIsLaunchingLiveRun(false);
@@ -1210,7 +1217,11 @@ export const TestSuiteRunsPage: React.FC = () => {
         },
       });
 
-      setLiveStreamUrl(liveRun.stream_url);
+      if (selectedPlatform === "android") {
+        setAndroidStreamUrl(liveRun.stream_url);
+      } else {
+        setWebStreamUrl(liveRun.stream_url);
+      }
       setSelectedScenario(scenario.id);
       setExpandedScenarioId(`scenario-${scenario.id}`);
       setSelectedStepIndex(0);
@@ -1236,7 +1247,8 @@ export const TestSuiteRunsPage: React.FC = () => {
         description: error instanceof Error ? error.message : "Failed to run scenario",
         variant: "destructive",
       });
-      setLiveStreamUrl(null);
+      setWebStreamUrl(null);
+setAndroidStreamUrl(null);
       setRunningPlatform(null);
     } finally {
       setIsLaunchingLiveRun(false);
@@ -1419,7 +1431,8 @@ export const TestSuiteRunsPage: React.FC = () => {
       });
 
       const testRunId = triggerResponse.test_run_id;
-      setLiveStreamUrl(triggerResponse.stream_url);
+      setWebStreamUrl(null);
+setAndroidStreamUrl(null);
 
       // Initial poll
       await pollTestRun(testRunId);
@@ -1463,7 +1476,8 @@ export const TestSuiteRunsPage: React.FC = () => {
         clearInterval(pollingIntervalRef.current);
         pollingIntervalRef.current = null;
       }
-      setLiveStreamUrl(null);
+      setWebStreamUrl(null);
+setAndroidStreamUrl(null);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to trigger test run",
@@ -1853,18 +1867,24 @@ export const TestSuiteRunsPage: React.FC = () => {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="text-base">Live Execution</CardTitle>
-                    {streamState === "live" ? (
-                      <Badge variant="outline" className="flex items-center gap-1 text-green-600">
-                        <span className="h-2 w-2 rounded-full bg-green-500" />
-                        Live
-                      </Badge>
-                    ) : streamState === "connecting" ? (
-                      <Badge variant="outline" className="text-amber-600">Connecting</Badge>
-                    ) : liveStreamUrl ? (
-                      <Badge variant="outline" className="text-red-600">Disconnected</Badge>
-                    ) : (
-                      <Badge variant="outline" className="text-muted-foreground">Idle</Badge>
-                    )}
+                  {selectedPlatform === "android" && androidStreamUrl ? (
+                    <Badge variant="outline" className="flex items-center gap-1 text-green-600">
+                      <span className="h-2 w-2 rounded-full bg-green-500" />
+                      Live
+                    </Badge>
+                  ) : streamState === "live" ? (
+                    <Badge variant="outline" className="flex items-center gap-1 text-green-600">
+                      <span className="h-2 w-2 rounded-full bg-green-500" />
+                      Live
+                    </Badge>
+                  ) : streamState === "connecting" ? (
+                    <Badge variant="outline" className="text-amber-600">Connecting</Badge>
+                  ) : activeStreamUrl ? (
+                    <Badge variant="outline" className="text-red-600">Disconnected</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-muted-foreground">Idle</Badge>
+                  )}
+
                   </CardHeader>
                   <CardContent>
                     {isLaunchingLiveRun ? (
@@ -1872,61 +1892,55 @@ export const TestSuiteRunsPage: React.FC = () => {
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Launching live run...
                       </div>
-                    ) : liveStreamUrl ? (
+                    ) : activeStreamUrl ? (
                       <div className="space-y-3">
-                        <div className="border rounded-lg overflow-hidden bg-black/90 relative">
-                          {selectedPlatform === "android" ? (
-                            <iframe
-                              key={liveStreamUrl}
-                              title="Android Stream"
-                              src={liveStreamUrl}
-                              className="w-full h-[260px] bg-black"
-                              allow="autoplay; fullscreen"
-                              referrerPolicy="no-referrer"
-                            />
-                          ) : (
-                            <>
-                              <video
-                                ref={streamVideoRef}
-                                className="w-full h-[260px] object-contain"
-                                autoPlay
-                                playsInline
-                                muted
-                              />
-                              {streamState !== "live" && (
-                                <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-sm gap-2">
-                                  {streamState === "connecting" ? (
-                                    <>
-                                      <Loader2 className="h-4 w-4 animate-spin" />
-                                      {streamRetryRef.current > 0
-                                        ? `Starting stream... (${streamRetryRef.current}/${MAX_STREAM_RETRIES})`
-                                        : "Connecting to WebRTC..."}
-                                    </>
-                                  ) : (
-                                    <>
-                                      <span>{streamError || "Stream disconnected"}</span>
-                                      <Button
-                                        size="sm"
-                                        variant="secondary"
-                                        onClick={() => {
-                                          streamRetryRef.current = 0;
-                                          setStreamAttempt((prev) => prev + 1);
-                                        }}
-                                      >
-                                        Retry
-                                      </Button>
-                                    </>
-                                  )}
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
+<div className="border rounded-lg overflow-hidden bg-black/90 relative">
+  {selectedPlatform === "web" && webStreamUrl && (
+    <video
+      ref={streamVideoRef}
+      className="w-full h-[260px] object-contain"
+      autoPlay
+      playsInline
+      muted
+    />
+  )}
+
+  {selectedPlatform === "android" && androidStreamUrl && (
+    <iframe
+      key={androidStreamUrl}
+      src={androidStreamUrl}
+      className="w-full h-[260px] bg-black"
+      allow="autoplay; fullscreen"
+      referrerPolicy="no-referrer"
+      onLoad={(e) => {
+        try {
+          const doc = e.currentTarget.contentDocument;
+          if (!doc) return;
+
+          const deviceView = doc.querySelector(".device-view") as HTMLElement | null;
+          if (!deviceView) return;
+
+          doc.body.innerHTML = "";
+          doc.body.style.margin = "0";
+          doc.body.style.background = "black";
+          doc.body.appendChild(deviceView);
+
+          deviceView.style.width = "100%";
+          deviceView.style.height = "100%";
+          deviceView.style.overflow = "hidden";
+        } catch {
+          // ignore cross-origin
+        }
+      }}
+    />
+  )}
+</div>
+
                         <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => window.open(liveStreamUrl, "_blank")}
+                            onClick={() => window.open(activeStreamUrl, "_blank")}
                           >
                             Open in new tab
                           </Button>
