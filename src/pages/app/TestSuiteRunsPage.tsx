@@ -1677,7 +1677,8 @@ setAndroidStreamUrl(null);
                 >
                   {scenarios.map((scenario) => {
                     const isScenarioLaunching = launchingScenarioId === scenario.id;
-                    const isScenarioRunning = scenario.status === "running" || isScenarioLaunching;
+                    const isRunningOnSelectedPlatform = runningPlatform === selectedPlatform;
+                    const isScenarioRunning = (scenario.status === "running" || isScenarioLaunching) && isRunningOnSelectedPlatform;
                     const isScenarioDisabled =
                       isRunningAll[selectedPlatform] ||
                       (runningPlatform === selectedPlatform && !isScenarioRunning) ||
@@ -1923,10 +1924,13 @@ setAndroidStreamUrl(null);
           doc.body.innerHTML = "";
           doc.body.style.margin = "0";
           doc.body.style.background = "black";
+          doc.body.style.display = "flex";
+          doc.body.style.justifyContent = "center";
+          doc.body.style.alignItems = "center";
+          doc.body.style.width = "100%";
+          doc.body.style.height = "100%";
           doc.body.appendChild(deviceView);
 
-          deviceView.style.width = "100%";
-          deviceView.style.height = "100%";
           deviceView.style.overflow = "hidden";
         } catch {
           // ignore cross-origin
