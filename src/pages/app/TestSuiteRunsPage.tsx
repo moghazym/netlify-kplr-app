@@ -124,7 +124,7 @@ export const TestSuiteRunsPage: React.FC = () => {
   const streamIceServersRef = useRef<{ servers: WebrtcIceServer[]; fetchedAt: number } | null>(null);
   const ICE_SERVERS_TTL_MS = 4 * 60 * 1000;
   const MAX_STREAM_RETRIES = 6;
-  const isAndroid = selectedPlatform === "android";
+  
 
   // Helper function to construct full image URL from filename or path
   const getImageUrl = (imagePath: string | undefined | null): string | undefined => {
@@ -243,7 +243,10 @@ export const TestSuiteRunsPage: React.FC = () => {
     });
   };
 
+  // Web-only WebRTC connection effect
   useEffect(() => {
+    if (selectedPlatform !== "web") return;
+
     let isActive = true;
     let retryTimer: number | null = null;
     let statsTimer: number | null = null;
@@ -276,11 +279,6 @@ export const TestSuiteRunsPage: React.FC = () => {
 
       if (!liveStreamUrl) {
         setStreamState("idle");
-        return;
-      }
-
-      if (selectedPlatform !== "web") {
-        setStreamState("live");
         return;
       }
 
@@ -451,6 +449,16 @@ export const TestSuiteRunsPage: React.FC = () => {
       cleanupVideo();
     };
   }, [liveStreamUrl, streamAttempt, selectedPlatform]);
+
+  // Android-only simple effect: treat presence of a liveStreamUrl as live
+  useEffect(() => {
+    if (selectedPlatform !== "android") return;
+    if (liveStreamUrl) {
+      setStreamState("live");
+    } else {
+      setStreamState("idle");
+    }
+  }, [liveStreamUrl, selectedPlatform]);
 
   const loadSuiteData = async () => {
     try {
@@ -1867,8 +1875,9 @@ export const TestSuiteRunsPage: React.FC = () => {
                     ) : liveStreamUrl ? (
                       <div className="space-y-3">
                         <div className="border rounded-lg overflow-hidden bg-black/90 relative">
-                          {isAndroid ? (
+                          {selectedPlatform === "android" ? (
                             <iframe
+                              key={liveStreamUrl}
                               title="Android Stream"
                               src={liveStreamUrl}
                               className="w-full h-[260px] bg-black"
@@ -1921,16 +1930,18 @@ export const TestSuiteRunsPage: React.FC = () => {
                           >
                             Open in new tab
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              streamRetryRef.current = 0;
-                              setStreamAttempt((prev) => prev + 1);
-                            }}
-                          >
-                            Reconnect
-                          </Button>
+                          {selectedPlatform === "web" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                streamRetryRef.current = 0;
+                                setStreamAttempt((prev) => prev + 1);
+                              }}
+                            >
+                              Reconnect
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ) : (
