@@ -37,6 +37,7 @@ import {
   getTestSuite,
   getScenarios,
   triggerLiveRun,
+  stopLiveSession,
   getTestRun,
   getLatestTestRun,
   createScenario,
@@ -118,6 +119,9 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [isLaunchingLiveRun, setIsLaunchingLiveRun] = useState(false);
   const [launchingScenarioId, setLaunchingScenarioId] = useState<string | null>(null);
   const [streamState, setStreamState] = useState<"idle" | "connecting" | "live" | "error">("idle");
+  const [currentPodInstanceId, setCurrentPodInstanceId] = useState<string | null>(null);
+  const [currentTestRunId, setCurrentTestRunId] = useState<number | null>(null);
+  const [isStoppingSession, setIsStoppingSession] = useState(false);
   const [streamAttempt, setStreamAttempt] = useState(0);
   const streamVideoRef = useRef<HTMLVideoElement | null>(null);
   const streamPcRef = useRef<RTCPeerConnection | null>(null);
@@ -637,6 +641,10 @@ useEffect(() => {
         },
       });
 
+      // Store pod instance ID and test run ID for session management
+      setCurrentPodInstanceId(liveRun.pod_instance_id);
+      setCurrentTestRunId(liveRun.test_run_id);
+
       if (selectedPlatform === "android") {
         setAndroidStreamUrl(liveRun.stream_url);
       } else {
@@ -668,8 +676,10 @@ useEffect(() => {
         variant: "destructive",
       });
       setWebStreamUrl(null);
-setAndroidStreamUrl(null);
+      setAndroidStreamUrl(null);
       setRunningPlatform(null);
+      setCurrentPodInstanceId(null);
+      setCurrentTestRunId(null);
     } finally {
       setIsLaunchingLiveRun(false);
       setLaunchingScenarioId(null);
@@ -1217,6 +1227,10 @@ setAndroidStreamUrl(null);
         },
       });
 
+      // Store pod instance ID and test run ID for session management
+      setCurrentPodInstanceId(liveRun.pod_instance_id);
+      setCurrentTestRunId(liveRun.test_run_id);
+
       if (selectedPlatform === "android") {
         setAndroidStreamUrl(liveRun.stream_url);
       } else {
@@ -1248,8 +1262,10 @@ setAndroidStreamUrl(null);
         variant: "destructive",
       });
       setWebStreamUrl(null);
-setAndroidStreamUrl(null);
+      setAndroidStreamUrl(null);
       setRunningPlatform(null);
+      setCurrentPodInstanceId(null);
+      setCurrentTestRunId(null);
     } finally {
       setIsLaunchingLiveRun(false);
       setLaunchingScenarioId(null);
@@ -1307,7 +1323,7 @@ setAndroidStreamUrl(null);
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
         }
-        
+
         // Always reset running state when test run completes
         if (runningPlatform) {
           setIsRunningAll(prev => ({ ...prev, [runningPlatform]: false }));
@@ -1316,6 +1332,10 @@ setAndroidStreamUrl(null);
           // Fallback: reset all platforms if runningPlatform is not set
           setIsRunningAll({ web: false, ios: false, android: false });
         }
+
+        // Clear session tracking (pod will be cleaned up by TTL)
+        setCurrentPodInstanceId(null);
+        setCurrentTestRunId(null);
         
         // Do one final poll after a short delay to ensure all data is available
         setTimeout(async () => {
@@ -1495,6 +1515,64 @@ setAndroidStreamUrl(null);
       );
     } finally {
       setIsLaunchingLiveRun(false);
+    }
+  };
+
+  const handleStopSession = async () => {
+    if (!currentPodInstanceId) {
+      toast({
+        title: "No active session",
+        description: "There is no active session to stop",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsStoppingSession(true);
+    try {
+      await stopLiveSession(currentPodInstanceId, currentTestRunId ?? undefined);
+
+      // Clear streams
+      setWebStreamUrl(null);
+      setAndroidStreamUrl(null);
+      setStreamState("idle");
+
+      // Stop polling
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+
+      // Reset running state
+      if (runningPlatform) {
+        setIsRunningAll(prev => ({ ...prev, [runningPlatform]: false }));
+        setRunningPlatform(null);
+      }
+
+      // Clear session tracking
+      setCurrentPodInstanceId(null);
+      setCurrentTestRunId(null);
+
+      // Update any running scenarios to show as cancelled
+      setScenarios(prevScenarios =>
+        prevScenarios.map(s =>
+          s.status === "running" ? { ...s, status: "pending" as const } : s
+        )
+      );
+
+      toast({
+        title: "Session stopped",
+        description: "The live execution session has been terminated",
+      });
+    } catch (error) {
+      console.error("Error stopping session:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to stop session",
+        variant: "destructive",
+      });
+    } finally {
+      setIsStoppingSession(false);
     }
   };
 
@@ -1868,24 +1946,41 @@ setAndroidStreamUrl(null);
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="text-base">Live Execution</CardTitle>
-                  {selectedPlatform === "android" && androidStreamUrl ? (
-                    <Badge variant="outline" className="flex items-center gap-1 text-green-600">
-                      <span className="h-2 w-2 rounded-full bg-green-500" />
-                      Live
-                    </Badge>
-                  ) : streamState === "live" ? (
-                    <Badge variant="outline" className="flex items-center gap-1 text-green-600">
-                      <span className="h-2 w-2 rounded-full bg-green-500" />
-                      Live
-                    </Badge>
-                  ) : streamState === "connecting" ? (
-                    <Badge variant="outline" className="text-amber-600">Connecting</Badge>
-                  ) : activeStreamUrl ? (
-                    <Badge variant="outline" className="text-red-600">Disconnected</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-muted-foreground">Idle</Badge>
-                  )}
-
+                    <div className="flex items-center gap-2">
+                      {selectedPlatform === "android" && androidStreamUrl ? (
+                        <Badge variant="outline" className="flex items-center gap-1 text-green-600">
+                          <span className="h-2 w-2 rounded-full bg-green-500" />
+                          Live
+                        </Badge>
+                      ) : streamState === "live" ? (
+                        <Badge variant="outline" className="flex items-center gap-1 text-green-600">
+                          <span className="h-2 w-2 rounded-full bg-green-500" />
+                          Live
+                        </Badge>
+                      ) : streamState === "connecting" ? (
+                        <Badge variant="outline" className="text-amber-600">Connecting</Badge>
+                      ) : activeStreamUrl ? (
+                        <Badge variant="outline" className="text-red-600">Disconnected</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-muted-foreground">Idle</Badge>
+                      )}
+                      {currentPodInstanceId && (
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={handleStopSession}
+                          disabled={isStoppingSession}
+                          className="h-7"
+                        >
+                          {isStoppingSession ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <XCircle className="h-3 w-3" />
+                          )}
+                          <span className="ml-1">Stop</span>
+                        </Button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {isLaunchingLiveRun ? (

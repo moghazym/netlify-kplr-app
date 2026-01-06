@@ -996,6 +996,22 @@ export const triggerLiveRun = async (data: LiveRunTriggerRequest): Promise<LiveR
   return apiPost<LiveRunTriggerResponse>('/api/live-runs/trigger', data);
 };
 
+export interface StopSessionResponse {
+  status: string;
+  pod_instance_id: string;
+  job_deleted: boolean;
+  service_deleted: boolean;
+  test_run_updated: boolean;
+}
+
+export const stopLiveSession = async (
+  podInstanceId: string,
+  testRunId?: number
+): Promise<StopSessionResponse> => {
+  const params = testRunId ? `?test_run_id=${testRunId}` : '';
+  return apiDelete<StopSessionResponse>(`/api/live-runs/sessions/${podInstanceId}${params}`);
+};
+
 export interface WebrtcIceServer {
   urls: string | string[];
   username?: string;
