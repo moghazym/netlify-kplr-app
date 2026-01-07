@@ -1197,8 +1197,11 @@ useEffect(() => {
         // Always reset running state when test run completes
         setAgentStatus("idle");
 
-        // Clear session tracking (pod will be cleaned up by TTL)
-        setCurrentPodInstanceId(null);
+        // In decoupled mode (isRuntimeOnly), keep the runtime alive after agent completes
+        // Only clear session tracking in legacy coupled mode
+        if (!isRuntimeOnly) {
+          setCurrentPodInstanceId(null);
+        }
         setCurrentTestRunId(null);
         
         // Do one final poll after a short delay to ensure all data is available
