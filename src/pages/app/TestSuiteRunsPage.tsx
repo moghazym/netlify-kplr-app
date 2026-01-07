@@ -25,6 +25,9 @@ import {
   Smartphone,
   Globe,
   Trash2,
+  RotateCcw,
+  Square,
+  Monitor,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Textarea } from "../../components/ui/textarea";
@@ -43,6 +46,11 @@ import {
   createScenario,
   deleteScenario,
   getWebrtcIceServers,
+  launchRuntime,
+  startAgentInSession,
+  stopAgentInSession,
+  resetBrowserInSession,
+  createTestRun,
   TestRunWithSessionsResponse,
   WebrtcIceServer
 } from "../../lib/api-client";
@@ -123,6 +131,15 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [currentTestRunId, setCurrentTestRunId] = useState<number | null>(null);
   const [isStoppingSession, setIsStoppingSession] = useState(false);
   const [streamAttempt, setStreamAttempt] = useState(0);
+
+  // Decoupled workflow state
+  const [isRuntimeOnly, setIsRuntimeOnly] = useState(false); // Runtime launched without agent
+  const [isLaunchingRuntime, setIsLaunchingRuntime] = useState(false);
+  const [isStartingAgent, setIsStartingAgent] = useState(false);
+  const [isStoppingAgent, setIsStoppingAgent] = useState(false);
+  const [isResettingBrowser, setIsResettingBrowser] = useState(false);
+  const [agentStatus, setAgentStatus] = useState<"idle" | "running" | "stopped">("idle");
+
   const streamVideoRef = useRef<HTMLVideoElement | null>(null);
   const streamPcRef = useRef<RTCPeerConnection | null>(null);
   const streamRetryRef = useRef(0);
@@ -1576,6 +1593,315 @@ setAndroidStreamUrl(null);
     }
   };
 
+  // ============================================================================
+  // Decoupled Workflow Handlers
+  // ============================================================================
+
+  /**
+   * Launch runtime only (browser/emulator) without starting an agent.
+   * This enables the decoupled workflow where you can manually control agent execution.
+   */
+  const handleLaunchRuntime = async () => {
+    if (!selectedProject || !suiteId) {
+      toast({
+        title: "Error",
+        description: "Project or suite ID is missing",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLaunchingRuntime(true);
+    setShowCompletionBanner(false);
+
+    try {
+      const suiteResolution = normalizeResolution(suiteInfo?.resolution);
+      const response = await launchRuntime({
+        platform: selectedPlatform === "android" ? "android" : "web",
+        ttl_seconds: 600, // 10 minute TTL for manual sessions
+        resolution: suiteResolution || undefined,
+        client_interaction: "enabled", // Enable interaction for manual testing
+      });
+
+      setCurrentPodInstanceId(response.pod_instance_id);
+      setIsRuntimeOnly(true);
+      setAgentStatus("idle");
+
+      if (selectedPlatform === "android") {
+        setAndroidStreamUrl(response.stream_url);
+      } else {
+        setWebStreamUrl(response.stream_url);
+      }
+
+      toast({
+        title: "Runtime launched",
+        description: "Browser is ready. You can now start the agent or interact manually.",
+      });
+    } catch (error) {
+      console.error("Error launching runtime:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to launch runtime",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLaunchingRuntime(false);
+    }
+  };
+
+  /**
+   * Start agent execution within an existing runtime session.
+   */
+  const handleStartAgent = async () => {
+    if (!currentPodInstanceId || !selectedProject || !suiteId) {
+      toast({
+        title: "Error",
+        description: "No active runtime or missing project/suite",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const suiteIdNum = parseInt(suiteId, 10);
+    if (isNaN(suiteIdNum)) {
+      toast({
+        title: "Error",
+        description: "Invalid test suite ID",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsStartingAgent(true);
+
+    try {
+      // Create a new test run for this agent execution
+      const testRun = await createTestRun({
+        test_suite_id: suiteIdNum,
+        run_type: "batch",
+        total_scenarios: scenarios.length,
+      });
+
+      setCurrentTestRunId(testRun.id);
+
+      // Build run request with all scenarios
+      const scenarioNames = scenarios.map(s => s.name);
+      const scenarioIds = scenarios.map(s => Number(s.id));
+      const baseUrl = suiteInfo?.application_url || "";
+
+      const runRequest = {
+        environment: selectedPlatform === "android" ? "android" : "web",
+        inputs: {
+          scenarios: scenarioNames,
+          scenario_ids: scenarioIds,
+          test_run_id: testRun.id,
+          base_url: baseUrl,
+          max_steps: 8,
+        },
+      };
+
+      await startAgentInSession(
+        currentPodInstanceId,
+        { run_request: runRequest },
+        selectedPlatform
+      );
+
+      setAgentStatus("running");
+      setRunningPlatform(selectedPlatform);
+      setIsRunningAll(prev => ({ ...prev, [selectedPlatform]: true }));
+
+      // Update scenarios to show running state
+      setScenarios(prevScenarios =>
+        prevScenarios.map(s => ({
+          ...s,
+          status: "running" as const,
+          hasRun: true,
+        }))
+      );
+
+      // Start polling for test run updates
+      await pollTestRun(testRun.id);
+      const interval = setInterval(() => {
+        pollTestRun(testRun.id);
+      }, 5000);
+      pollingIntervalRef.current = interval;
+
+      toast({
+        title: "Agent started",
+        description: "Executing test scenarios...",
+      });
+    } catch (error) {
+      console.error("Error starting agent:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to start agent",
+        variant: "destructive",
+      });
+    } finally {
+      setIsStartingAgent(false);
+    }
+  };
+
+  /**
+   * Stop agent execution but keep the runtime alive.
+   */
+  const handleStopAgent = async () => {
+    if (!currentPodInstanceId) {
+      toast({
+        title: "Error",
+        description: "No active runtime session",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsStoppingAgent(true);
+
+    try {
+      await stopAgentInSession(currentPodInstanceId, selectedPlatform);
+
+      // Stop polling
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+
+      setAgentStatus("stopped");
+      setRunningPlatform(null);
+      setIsRunningAll({ web: false, ios: false, android: false });
+
+      // Update running scenarios to pending
+      setScenarios(prevScenarios =>
+        prevScenarios.map(s =>
+          s.status === "running" ? { ...s, status: "pending" as const } : s
+        )
+      );
+
+      toast({
+        title: "Agent stopped",
+        description: "Runtime is still active. You can reset the browser and start again.",
+      });
+    } catch (error) {
+      console.error("Error stopping agent:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to stop agent",
+        variant: "destructive",
+      });
+    } finally {
+      setIsStoppingAgent(false);
+    }
+  };
+
+  /**
+   * Reset browser state (clear cookies, cache, storage) and optionally navigate to base URL.
+   */
+  const handleResetBrowser = async () => {
+    if (!currentPodInstanceId) {
+      toast({
+        title: "Error",
+        description: "No active runtime session",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsResettingBrowser(true);
+
+    try {
+      const baseUrl = suiteInfo?.application_url || undefined;
+      await resetBrowserInSession(currentPodInstanceId, { url: baseUrl }, selectedPlatform);
+
+      // Reset scenarios to pending state for fresh run
+      setScenarios(prevScenarios =>
+        prevScenarios.map(s => ({
+          ...s,
+          status: "pending" as const,
+          hasRun: false,
+          steps: [],
+        }))
+      );
+
+      setCurrentTestRunId(null);
+      setAgentStatus("idle");
+
+      toast({
+        title: "Browser reset",
+        description: baseUrl
+          ? `Cleared browser state and navigated to ${baseUrl}`
+          : "Cleared cookies, cache, and storage",
+      });
+    } catch (error) {
+      console.error("Error resetting browser:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to reset browser",
+        variant: "destructive",
+      });
+    } finally {
+      setIsResettingBrowser(false);
+    }
+  };
+
+  /**
+   * Stop runtime entirely (terminates pod).
+   */
+  const handleStopRuntime = async () => {
+    if (!currentPodInstanceId) {
+      toast({
+        title: "No active session",
+        description: "There is no active runtime to stop",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsStoppingSession(true);
+    try {
+      await stopLiveSession(currentPodInstanceId, currentTestRunId ?? undefined);
+
+      // Clear all state
+      setWebStreamUrl(null);
+      setAndroidStreamUrl(null);
+      setStreamState("idle");
+      setIsRuntimeOnly(false);
+      setAgentStatus("idle");
+
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+
+      if (runningPlatform) {
+        setIsRunningAll(prev => ({ ...prev, [runningPlatform]: false }));
+        setRunningPlatform(null);
+      }
+
+      setCurrentPodInstanceId(null);
+      setCurrentTestRunId(null);
+
+      setScenarios(prevScenarios =>
+        prevScenarios.map(s =>
+          s.status === "running" ? { ...s, status: "pending" as const } : s
+        )
+      );
+
+      toast({
+        title: "Runtime stopped",
+        description: "The live session has been terminated",
+      });
+    } catch (error) {
+      console.error("Error stopping runtime:", error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to stop runtime",
+        variant: "destructive",
+      });
+    } finally {
+      setIsStoppingSession(false);
+    }
+  };
+
   const handleShare = () => {
     const url = `${window.location.origin}/share/suite/${suiteId}/run/latest`;
     navigator.clipboard.writeText(url);
@@ -1944,9 +2270,10 @@ setAndroidStreamUrl(null);
               {/* Right Column - Details */}
               <div className="space-y-4">
                 <Card>
-                  <CardHeader className="flex flex-row items-center justify-between">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
                     <CardTitle className="text-base">Live Execution</CardTitle>
                     <div className="flex items-center gap-2">
+                      {/* Status Badge */}
                       {selectedPlatform === "android" && androidStreamUrl ? (
                         <Badge variant="outline" className="flex items-center gap-1 text-green-600">
                           <span className="h-2 w-2 rounded-full bg-green-500" />
@@ -1964,11 +2291,83 @@ setAndroidStreamUrl(null);
                       ) : (
                         <Badge variant="outline" className="text-muted-foreground">Idle</Badge>
                       )}
-                      {currentPodInstanceId && (
+
+                      {/* Agent Status Badge (only show in decoupled mode) */}
+                      {isRuntimeOnly && currentPodInstanceId && (
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "flex items-center gap-1",
+                            agentStatus === "running" ? "text-blue-600" :
+                            agentStatus === "stopped" ? "text-amber-600" :
+                            "text-muted-foreground"
+                          )}
+                        >
+                          {agentStatus === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                          Agent: {agentStatus}
+                        </Badge>
+                      )}
+                    </div>
+                  </CardHeader>
+
+                  {/* Runtime Controls - Show when runtime is active */}
+                  {currentPodInstanceId && isRuntimeOnly && (
+                    <div className="px-6 pb-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* Start/Stop Agent Button */}
+                        {agentStatus === "running" ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleStopAgent}
+                            disabled={isStoppingAgent}
+                            className="h-7"
+                          >
+                            {isStoppingAgent ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Square className="h-3 w-3" />
+                            )}
+                            <span className="ml-1">Stop Agent</span>
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={handleStartAgent}
+                            disabled={isStartingAgent || scenarios.length === 0}
+                            className="h-7 bg-green-600 hover:bg-green-700"
+                          >
+                            {isStartingAgent ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              <Play className="h-3 w-3" />
+                            )}
+                            <span className="ml-1">Start Agent</span>
+                          </Button>
+                        )}
+
+                        {/* Reset Browser Button */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleResetBrowser}
+                          disabled={isResettingBrowser || agentStatus === "running"}
+                          className="h-7"
+                        >
+                          {isResettingBrowser ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <RotateCcw className="h-3 w-3" />
+                          )}
+                          <span className="ml-1">Reset Browser</span>
+                        </Button>
+
+                        {/* Stop Runtime Button */}
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={handleStopSession}
+                          onClick={handleStopRuntime}
                           disabled={isStoppingSession}
                           className="h-7"
                         >
@@ -1977,16 +2376,36 @@ setAndroidStreamUrl(null);
                           ) : (
                             <XCircle className="h-3 w-3" />
                           )}
-                          <span className="ml-1">Stop</span>
+                          <span className="ml-1">Stop Runtime</span>
                         </Button>
-                      )}
+                      </div>
                     </div>
-                  </CardHeader>
+                  )}
+
+                  {/* Legacy Stop Button - Show for non-decoupled mode */}
+                  {currentPodInstanceId && !isRuntimeOnly && (
+                    <div className="px-6 pb-3">
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={handleStopSession}
+                        disabled={isStoppingSession}
+                        className="h-7"
+                      >
+                        {isStoppingSession ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <XCircle className="h-3 w-3" />
+                        )}
+                        <span className="ml-1">Stop</span>
+                      </Button>
+                    </div>
+                  )}
                   <CardContent>
-                    {isLaunchingLiveRun ? (
+                    {isLaunchingLiveRun || isLaunchingRuntime ? (
                       <div className="h-[220px] flex items-center justify-center text-muted-foreground gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        Launching live run...
+                        {isLaunchingRuntime ? "Launching runtime..." : "Launching live run..."}
                       </div>
                     ) : activeStreamUrl ? (
                       <div className="space-y-3">
@@ -2058,8 +2477,26 @@ setAndroidStreamUrl(null);
                         </div>
                       </div>
                     ) : (
-                      <div className="h-[220px] flex items-center justify-center text-muted-foreground">
-                        Run a scenario to start a live session.
+                      <div className="h-[220px] flex flex-col items-center justify-center text-muted-foreground gap-4">
+                        <p>No active runtime session.</p>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleLaunchRuntime}
+                            disabled={isLaunchingRuntime || selectedPlatform === "ios"}
+                            className="h-8"
+                          >
+                            {isLaunchingRuntime ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Monitor className="h-4 w-4 mr-2" />
+                            )}
+                            Start Runtime Only
+                          </Button>
+                          <span className="text-xs text-muted-foreground">or</span>
+                          <span className="text-xs">Run a scenario above</span>
+                        </div>
                       </div>
                     )}
                   </CardContent>

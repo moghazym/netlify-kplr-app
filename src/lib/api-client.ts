@@ -1027,6 +1027,106 @@ export const getWebrtcIceServers = async (): Promise<WebrtcIceServersResponse> =
   return apiGet<WebrtcIceServersResponse>('/api/webrtc/ice-servers');
 };
 
+// ============================================================================
+// Runtime/Agent Lifecycle API (Decoupled Mode)
+// ============================================================================
+
+export interface RuntimeLaunchRequest {
+  platform: 'web' | 'android';
+  ttl_seconds?: number;
+  resolution?: string;
+  client_interaction?: 'enabled' | 'disabled';
+}
+
+export interface RuntimeLaunchResponse {
+  status: string;
+  pod_instance_id: string;
+  stream_url: string;
+}
+
+/**
+ * Launch a runtime-only pod (browser/emulator) without starting an agent.
+ * Use this for decoupled workflow where runtime and agent are controlled separately.
+ */
+export const launchRuntime = async (data: RuntimeLaunchRequest): Promise<RuntimeLaunchResponse> => {
+  return apiPost<RuntimeLaunchResponse>('/api/live-runs/runtime', data);
+};
+
+export interface AgentStartRequest {
+  run_request: {
+    environment: string;
+    inputs: {
+      scenarios: string[];
+      scenario_ids: number[];
+      test_run_id: number;
+      base_url?: string;
+      max_steps?: number;
+    };
+  };
+}
+
+export interface AgentControlResponse {
+  ok: boolean;
+  result: Record<string, any>;
+}
+
+/**
+ * Start an agent within an existing runtime session.
+ */
+export const startAgentInSession = async (
+  podInstanceId: string,
+  data: AgentStartRequest,
+  platform: string = 'web'
+): Promise<AgentControlResponse> => {
+  return apiPost<AgentControlResponse>(
+    `/api/live-runs/sessions/${podInstanceId}/agent/start?platform=${platform}`,
+    data
+  );
+};
+
+/**
+ * Stop an agent within an existing runtime session (keeps runtime alive).
+ */
+export const stopAgentInSession = async (
+  podInstanceId: string,
+  platform: string = 'web'
+): Promise<AgentControlResponse> => {
+  return apiPost<AgentControlResponse>(
+    `/api/live-runs/sessions/${podInstanceId}/agent/stop?platform=${platform}`
+  );
+};
+
+/**
+ * Get the status of an agent within an existing runtime session.
+ */
+export const getAgentStatusInSession = async (
+  podInstanceId: string,
+  platform: string = 'web'
+): Promise<AgentControlResponse> => {
+  return apiGet<AgentControlResponse>(
+    `/api/live-runs/sessions/${podInstanceId}/agent/status?platform=${platform}`
+  );
+};
+
+export interface BrowserResetRequest {
+  url?: string;
+}
+
+/**
+ * Reset browser state in an existing runtime session.
+ * Clears cookies, cache, storage, and history. Optionally navigates to a URL after reset.
+ */
+export const resetBrowserInSession = async (
+  podInstanceId: string,
+  data: BrowserResetRequest = {},
+  platform: string = 'web'
+): Promise<AgentControlResponse> => {
+  return apiPost<AgentControlResponse>(
+    `/api/live-runs/sessions/${podInstanceId}/browser/reset?platform=${platform}`,
+    data
+  );
+};
+
 /**
  * Update a test run
  */
