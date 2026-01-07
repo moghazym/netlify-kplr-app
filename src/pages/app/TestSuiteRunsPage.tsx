@@ -13,7 +13,6 @@ import {
   Share2,
   Play,
   Pencil,
-  Sparkles,
   ArrowLeft,
   Loader2,
   Bug,
@@ -35,11 +34,11 @@ import { Input } from "../../components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../components/ui/tooltip";
 import { useAuth } from "../../contexts/AuthContext";
 import { useProject } from "../../contexts/ProjectContext";
+import { useRuntime } from "../../contexts/RuntimeContext";
 import { cn } from "../../lib/utils";
 import {
   getTestSuite,
   getScenarios,
-  triggerLiveRun,
   stopLiveSession,
   getTestRun,
   getLatestTestRun,
@@ -84,6 +83,7 @@ export const TestSuiteRunsPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { selectedProject } = useProject();
+  const { activeRuntime, setActiveRuntime, clearRuntime, hasRuntimeForOtherSuite } = useRuntime();
   const { toast } = useToast();
   const [selectedScenario, setSelectedScenario] = useState<string | null>(null);
   const [selectedStepIndex, setSelectedStepIndex] = useState(0);
@@ -97,11 +97,6 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const [expandedScenarioId, setExpandedScenarioId] = useState<string | undefined>("");
   const [showAllLogs, setShowAllLogs] = useState(false);
-  const [isRunningAll, setIsRunningAll] = useState<{ web: boolean; ios: boolean; android: boolean }>({
-    web: false,
-    ios: false,
-    android: false,
-  });
   const [showCompletionBanner, setShowCompletionBanner] = useState(false);
   const [lastRunStats, setLastRunStats] = useState<{ passed: number; failed: number; total: number } | null>(null);
 
@@ -114,7 +109,6 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [runningPlatform, setRunningPlatform] = useState<"web" | "ios" | "android" | null>(null);
   const [currentScreenshotIndex, setCurrentScreenshotIndex] = useState(0);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [expandedImageError, setExpandedImageError] = useState(false);
@@ -124,8 +118,6 @@ export const TestSuiteRunsPage: React.FC = () => {
 
   const [androidStreamUrl, setAndroidStreamUrl] = useState<string | null>(null);
 
-  const [isLaunchingLiveRun, setIsLaunchingLiveRun] = useState(false);
-  const [launchingScenarioId, setLaunchingScenarioId] = useState<string | null>(null);
   const [streamState, setStreamState] = useState<"idle" | "connecting" | "live" | "error">("idle");
   const [currentPodInstanceId, setCurrentPodInstanceId] = useState<string | null>(null);
   const [currentTestRunId, setCurrentTestRunId] = useState<number | null>(null);
@@ -139,6 +131,7 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [isStoppingAgent, setIsStoppingAgent] = useState(false);
   const [isResettingBrowser, setIsResettingBrowser] = useState(false);
   const [agentStatus, setAgentStatus] = useState<"idle" | "running" | "stopped">("idle");
+  const [isRuntimeConflictDialogOpen, setIsRuntimeConflictDialogOpen] = useState(false);
 
   const streamVideoRef = useRef<HTMLVideoElement | null>(null);
   const streamPcRef = useRef<RTCPeerConnection | null>(null);
@@ -234,10 +227,30 @@ export const TestSuiteRunsPage: React.FC = () => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
-      setIsRunningAll({ web: false, ios: false, android: false });
-      setRunningPlatform(null);
     }
   }, [suiteId]);
+
+  // Restore runtime state if user navigates back to a suite with an active runtime
+  useEffect(() => {
+    if (activeRuntime && suiteId && activeRuntime.suiteId === suiteId) {
+      // Restore the runtime state from context
+      setCurrentPodInstanceId(activeRuntime.podInstanceId);
+      setIsRuntimeOnly(true);
+      setAgentStatus("idle");
+      if (activeRuntime.platform === "android") {
+        setAndroidStreamUrl(activeRuntime.streamUrl);
+        setSelectedPlatform("android");
+      } else {
+        setWebStreamUrl(activeRuntime.streamUrl);
+        setSelectedPlatform("web");
+      }
+    } else if (!activeRuntime) {
+      // Clear local runtime state if context has no active runtime
+      setCurrentPodInstanceId(null);
+      setIsRuntimeOnly(false);
+      setAgentStatus("idle");
+    }
+  }, [activeRuntime, suiteId]);
 
   useEffect(() => {
     streamRetryRef.current = 0;
@@ -636,54 +649,9 @@ useEffect(() => {
       setSelectedStepIndex(0);
       setCurrentScreenshotIndex(0);
 
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-
-      setIsLaunchingLiveRun(true);
-      setLaunchingScenarioId(createdScenario.id.toString());
-      setRunningPlatform(selectedPlatform);
-      setShowCompletionBanner(false);
-
-      const suiteResolution = normalizeResolution(suiteInfo?.resolution);
-      const liveRun = await triggerLiveRun({
-        project_id: selectedProject.id,
-        suite_id: suiteIdNum,
-        scenario_id: createdScenario.id,
-        platform: selectedPlatform === "android" ? "android" : "web",
-        resolution: suiteResolution || undefined,
-        options: {
-          max_steps: 8,
-        },
-      });
-
-      // Store pod instance ID and test run ID for session management
-      setCurrentPodInstanceId(liveRun.pod_instance_id);
-      setCurrentTestRunId(liveRun.test_run_id);
-
-      if (selectedPlatform === "android") {
-        setAndroidStreamUrl(liveRun.stream_url);
-      } else {
-        setWebStreamUrl(liveRun.stream_url);
-      }
-      setScenarios(prevScenarios =>
-        prevScenarios.map(s =>
-          s.id === createdScenario.id.toString()
-            ? { ...s, status: "running" as const, hasRun: true }
-            : s
-        )
-      );
-
-      await pollTestRun(liveRun.test_run_id);
-      const interval = setInterval(() => {
-        pollTestRun(liveRun.test_run_id);
-      }, 5000);
-      pollingIntervalRef.current = interval;
-
       toast({
         title: "Scenario saved",
-        description: "Live run started",
+        description: "Scenario has been added to the test suite.",
       });
     } catch (error) {
       console.error("Error adding scenario:", error);
@@ -692,14 +660,6 @@ useEffect(() => {
         description: error instanceof Error ? error.message : "Failed to save scenario",
         variant: "destructive",
       });
-      setWebStreamUrl(null);
-      setAndroidStreamUrl(null);
-      setRunningPlatform(null);
-      setCurrentPodInstanceId(null);
-      setCurrentTestRunId(null);
-    } finally {
-      setIsLaunchingLiveRun(false);
-      setLaunchingScenarioId(null);
     }
   };
 
@@ -713,25 +673,6 @@ useEffect(() => {
     ));
     setIsEditDialogOpen(false);
     setEditingScenario(null);
-  };
-
-  const handleRunEditedScenario = async () => {
-    if (!editingScenario || !editingScenario.name.trim()) return;
-    const scenarioId = editingScenario.id;
-    const scenarioName = editingScenario.name;
-    setScenarios(prev => prev.map(s =>
-      s.id === scenarioId ? { ...s, name: scenarioName } : s
-    ));
-    setIsEditDialogOpen(false);
-    setEditingScenario(null);
-    const scenarioToRun = scenarios.find(s => s.id === scenarioId) || {
-      id: scenarioId,
-      name: scenarioName,
-      status: "pending" as const,
-      hasRun: false,
-      steps: [],
-    };
-    await handleRunScenario(scenarioToRun);
   };
 
   const handleDeleteScenario = async () => {
@@ -1201,94 +1142,6 @@ useEffect(() => {
     return mappedScenarios;
   };
 
-  const handleRunScenario = async (scenario: Scenario) => {
-    if (!selectedProject || !suiteId) {
-      toast({
-        title: "Error",
-        description: "Project or suite ID is missing",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const suiteIdNum = parseInt(suiteId, 10);
-    if (isNaN(suiteIdNum)) {
-      toast({
-        title: "Error",
-        description: "Invalid test suite ID",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-
-    try {
-      setIsLaunchingLiveRun(true);
-      setLaunchingScenarioId(scenario.id);
-      setRunningPlatform(selectedPlatform);
-      setShowCompletionBanner(false);
-
-      const suiteResolution = normalizeResolution(suiteInfo?.resolution);
-      const liveRun = await triggerLiveRun({
-        project_id: selectedProject.id,
-        suite_id: suiteIdNum,
-        scenario_id: Number(scenario.id),
-        platform: selectedPlatform === "android" ? "android" : "web",
-        resolution: suiteResolution || undefined,
-        options: {
-          max_steps: 8,
-        },
-      });
-
-      // Store pod instance ID and test run ID for session management
-      setCurrentPodInstanceId(liveRun.pod_instance_id);
-      setCurrentTestRunId(liveRun.test_run_id);
-
-      if (selectedPlatform === "android") {
-        setAndroidStreamUrl(liveRun.stream_url);
-      } else {
-        setWebStreamUrl(liveRun.stream_url);
-      }
-      setSelectedScenario(scenario.id);
-      setExpandedScenarioId(`scenario-${scenario.id}`);
-      setSelectedStepIndex(0);
-      setCurrentScreenshotIndex(0);
-
-      setScenarios(prevScenarios =>
-        prevScenarios.map(s =>
-          s.id === scenario.id
-            ? { ...s, status: "running" as const, hasRun: true }
-            : s
-        )
-      );
-
-      await pollTestRun(liveRun.test_run_id);
-      const interval = setInterval(() => {
-        pollTestRun(liveRun.test_run_id);
-      }, 5000);
-      pollingIntervalRef.current = interval;
-    } catch (error) {
-      console.error("Error running scenario:", error);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to run scenario",
-        variant: "destructive",
-      });
-      setWebStreamUrl(null);
-      setAndroidStreamUrl(null);
-      setRunningPlatform(null);
-      setCurrentPodInstanceId(null);
-      setCurrentTestRunId(null);
-    } finally {
-      setIsLaunchingLiveRun(false);
-      setLaunchingScenarioId(null);
-    }
-  };
-
   // Poll test run status
   const pollTestRun = async (testRunId: number) => {
     try {
@@ -1342,13 +1195,7 @@ useEffect(() => {
         }
 
         // Always reset running state when test run completes
-        if (runningPlatform) {
-          setIsRunningAll(prev => ({ ...prev, [runningPlatform]: false }));
-          setRunningPlatform(null);
-        } else {
-          // Fallback: reset all platforms if runningPlatform is not set
-          setIsRunningAll({ web: false, ios: false, android: false });
-        }
+        setAgentStatus("idle");
 
         // Clear session tracking (pod will be cleaned up by TTL)
         setCurrentPodInstanceId(null);
@@ -1413,10 +1260,7 @@ useEffect(() => {
           clearInterval(pollingIntervalRef.current);
           pollingIntervalRef.current = null;
         }
-        if (runningPlatform) {
-          setIsRunningAll(prev => ({ ...prev, [runningPlatform]: false }));
-          setRunningPlatform(null);
-        }
+        setAgentStatus("idle");
         toast({
           title: "Error",
           description: "Test run not found",
@@ -1425,113 +1269,6 @@ useEffect(() => {
       }
       // For other errors, continue polling but log them
       // The polling will continue and might recover
-    }
-  };
-
-  const handleRunAll = async () => {
-    if (!selectedProject || !suiteId) {
-      toast({
-        title: "Error",
-        description: "Project or suite ID is missing",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Stop any existing polling for other platforms
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
-    }
-
-    setIsLaunchingLiveRun(true);
-    setIsRunningAll(prev => ({ ...prev, [selectedPlatform]: true }));
-    setRunningPlatform(selectedPlatform);
-    setShowCompletionBanner(false);
-
-    try {
-      const suiteIdNum = parseInt(suiteId, 10);
-      if (isNaN(suiteIdNum)) {
-        throw new Error("Invalid suite ID");
-      }
-
-      // Call trigger API
-      const suiteResolution = normalizeResolution(suiteInfo?.resolution);
-      const triggerResponse = await triggerLiveRun({
-        project_id: selectedProject.id,
-        suite_id: suiteIdNum,
-        platform: selectedPlatform === "web" ? "web" : selectedPlatform,
-        resolution: suiteResolution || undefined,
-        options: {
-          max_steps: 8,
-        },
-      });
-
-      const testRunId = triggerResponse.test_run_id;
-      setWebStreamUrl(null);
-setAndroidStreamUrl(null);
-
-      // Initial poll
-      await pollTestRun(testRunId);
-
-      // Set up polling interval (poll every 5 seconds)
-      const interval = setInterval(() => {
-        pollTestRun(testRunId);
-      }, 5000);
-
-      pollingIntervalRef.current = interval;
-
-      // Also update scenarios to show running state immediately
-      setScenarios(prevScenarios => {
-        const updated = prevScenarios.map(s => ({
-          ...s,
-          status: "running" as const,
-          hasRun: true,
-        }));
-
-        // Expand and select the first scenario automatically
-        if (updated.length > 0) {
-          const firstScenario = updated[0];
-          setExpandedScenarioId(`scenario-${firstScenario.id}`);
-          setSelectedScenario(firstScenario.id);
-          setSelectedStepIndex(0);
-          setCurrentScreenshotIndex(0);
-        }
-
-        return updated;
-      });
-
-      toast({
-        title: "Test run started",
-        description: `Test run ${testRunId} has been queued and is running`,
-      });
-    } catch (error) {
-      console.error("Error triggering test run:", error);
-
-      // Clean up on error
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-        pollingIntervalRef.current = null;
-      }
-      setWebStreamUrl(null);
-setAndroidStreamUrl(null);
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to trigger test run",
-        variant: "destructive",
-      });
-      setIsRunningAll(prev => ({ ...prev, [selectedPlatform]: false }));
-      setRunningPlatform(null);
-
-      // Reset scenarios to pending state
-      setScenarios(prevScenarios =>
-        prevScenarios.map(s => ({
-          ...s,
-          status: s.hasRun ? s.status : "pending" as const,
-        }))
-      );
-    } finally {
-      setIsLaunchingLiveRun(false);
     }
   };
 
@@ -1561,14 +1298,15 @@ setAndroidStreamUrl(null);
       }
 
       // Reset running state
-      if (runningPlatform) {
-        setIsRunningAll(prev => ({ ...prev, [runningPlatform]: false }));
-        setRunningPlatform(null);
-      }
+      setAgentStatus("idle");
 
       // Clear session tracking
       setCurrentPodInstanceId(null);
       setCurrentTestRunId(null);
+      setIsRuntimeOnly(false);
+
+      // Clear runtime from global context
+      setActiveRuntime(null);
 
       // Update any running scenarios to show as cancelled
       setScenarios(prevScenarios =>
@@ -1601,7 +1339,7 @@ setAndroidStreamUrl(null);
    * Launch runtime only (browser/emulator) without starting an agent.
    * This enables the decoupled workflow where you can manually control agent execution.
    */
-  const handleLaunchRuntime = async () => {
+  const handleLaunchRuntime = async (forceReplace: boolean = false) => {
     if (!selectedProject || !suiteId) {
       toast({
         title: "Error",
@@ -1609,6 +1347,22 @@ setAndroidStreamUrl(null);
         variant: "destructive",
       });
       return;
+    }
+
+    // Check if user already has a runtime on another suite
+    if (!forceReplace && hasRuntimeForOtherSuite(suiteId)) {
+      setIsRuntimeConflictDialogOpen(true);
+      return;
+    }
+
+    // If forcing replacement, stop the existing runtime first
+    if (forceReplace && activeRuntime) {
+      try {
+        await clearRuntime();
+      } catch (error) {
+        console.error("Error clearing existing runtime:", error);
+        // Continue anyway
+      }
     }
 
     setIsLaunchingRuntime(true);
@@ -1633,6 +1387,16 @@ setAndroidStreamUrl(null);
         setWebStreamUrl(response.stream_url);
       }
 
+      // Register runtime in global context
+      setActiveRuntime({
+        podInstanceId: response.pod_instance_id,
+        suiteId: suiteId,
+        suiteName: suiteInfo?.name,
+        platform: selectedPlatform === "android" ? "android" : "web",
+        streamUrl: response.stream_url,
+        launchedAt: Date.now(),
+      });
+
       toast({
         title: "Runtime launched",
         description: "Browser is ready. You can now start the agent or interact manually.",
@@ -1651,12 +1415,37 @@ setAndroidStreamUrl(null);
 
   /**
    * Start agent execution within an existing runtime session.
+   * Validates that the runtime belongs to this suite before starting.
    */
   const handleStartAgent = async () => {
     if (!currentPodInstanceId || !selectedProject || !suiteId) {
       toast({
         title: "Error",
         description: "No active runtime or missing project/suite",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Verify that the active runtime belongs to this suite
+    if (!activeRuntime || activeRuntime.suiteId !== suiteId) {
+      toast({
+        title: "Runtime Mismatch",
+        description: "The active runtime does not belong to this test suite. Please launch a new runtime.",
+        variant: "destructive",
+      });
+      // Clear local state since it's stale
+      setCurrentPodInstanceId(null);
+      setIsRuntimeOnly(false);
+      setAgentStatus("idle");
+      return;
+    }
+
+    // Verify the pod instance ID matches
+    if (activeRuntime.podInstanceId !== currentPodInstanceId) {
+      toast({
+        title: "Session Mismatch",
+        description: "Runtime session ID mismatch. Please stop the runtime and launch a new one.",
         variant: "destructive",
       });
       return;
@@ -1707,8 +1496,6 @@ setAndroidStreamUrl(null);
       );
 
       setAgentStatus("running");
-      setRunningPlatform(selectedPlatform);
-      setIsRunningAll(prev => ({ ...prev, [selectedPlatform]: true }));
 
       // Update scenarios to show running state
       setScenarios(prevScenarios =>
@@ -1767,8 +1554,6 @@ setAndroidStreamUrl(null);
       }
 
       setAgentStatus("stopped");
-      setRunningPlatform(null);
-      setIsRunningAll({ web: false, ios: false, android: false });
 
       // Update running scenarios to pending
       setScenarios(prevScenarios =>
@@ -1872,13 +1657,13 @@ setAndroidStreamUrl(null);
         pollingIntervalRef.current = null;
       }
 
-      if (runningPlatform) {
-        setIsRunningAll(prev => ({ ...prev, [runningPlatform]: false }));
-        setRunningPlatform(null);
-      }
-
+      setAgentStatus("idle");
       setCurrentPodInstanceId(null);
       setCurrentTestRunId(null);
+      setIsRuntimeOnly(false);
+
+      // Clear runtime from global context
+      setActiveRuntime(null);
 
       setScenarios(prevScenarios =>
         prevScenarios.map(s =>
@@ -1967,29 +1752,65 @@ setAndroidStreamUrl(null);
                     <Share2 className="h-4 w-4 mr-2" />
                     Share
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleRunAll}
-                    disabled={
-                      isRunningAll[selectedPlatform] ||
-                      runningPlatform === selectedPlatform ||
-                      scenarios.length === 0 ||
-                      selectedPlatform === "ios"
-                    }
-                    className="bg-orange-500 hover:bg-orange-600 text-white rounded-lg"
-                  >
-                    {isRunningAll[selectedPlatform] ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Running All...
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-4 w-4 mr-2" />
-                        Run All
-                      </>
-                    )}
-                  </Button>
+                  {/* Runtime/Agent Controls */}
+                  {!currentPodInstanceId ? (
+                    <Button
+                      size="sm"
+                      onClick={() => handleLaunchRuntime()}
+                      disabled={isLaunchingRuntime || selectedPlatform === "ios"}
+                      className="bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
+                    >
+                      {isLaunchingRuntime ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Starting Runtime...
+                        </>
+                      ) : (
+                        <>
+                          <Monitor className="h-4 w-4 mr-2" />
+                          Start Runtime
+                        </>
+                      )}
+                    </Button>
+                  ) : agentStatus === "running" ? (
+                    <Button
+                      size="sm"
+                      onClick={handleStopAgent}
+                      disabled={isStoppingAgent}
+                      className="bg-amber-500 hover:bg-amber-600 text-white rounded-lg"
+                    >
+                      {isStoppingAgent ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Stopping...
+                        </>
+                      ) : (
+                        <>
+                          <Square className="h-4 w-4 mr-2" />
+                          Stop Agent
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={handleStartAgent}
+                      disabled={isStartingAgent || scenarios.length === 0}
+                      className="bg-green-500 hover:bg-green-600 text-white rounded-lg"
+                    >
+                      {isStartingAgent ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Starting Agent...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-4 w-4 mr-2" />
+                          Start Agent
+                        </>
+                      )}
+                    </Button>
+                  )}
               </div>
             </div>
 
@@ -2080,14 +1901,6 @@ setAndroidStreamUrl(null);
                   onValueChange={setExpandedScenarioId}
                 >
                   {scenarios.map((scenario) => {
-                    const isScenarioLaunching = launchingScenarioId === scenario.id;
-                    const isRunningOnSelectedPlatform = runningPlatform === selectedPlatform;
-                    const isScenarioRunning = (scenario.status === "running" || isScenarioLaunching) && isRunningOnSelectedPlatform;
-                    const isScenarioDisabled =
-                      isRunningAll[selectedPlatform] ||
-                      (runningPlatform === selectedPlatform && !isScenarioRunning) ||
-                      (isLaunchingLiveRun && !isScenarioLaunching);
-
                     return (
                       <AccordionItem
                         key={scenario.id}
@@ -2174,23 +1987,6 @@ setAndroidStreamUrl(null);
                                 </Tooltip>
                               </TooltipProvider>
                             )}
-
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="h-7 px-2"
-                              disabled={isScenarioDisabled}
-                              onClick={() => {
-                                handleRunScenario(scenario);
-                              }}
-                            >
-                              {isScenarioRunning ? (
-                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                              ) : (
-                                <Play className="h-3 w-3 mr-1" />
-                              )}
-                              {isScenarioRunning ? "Running" : "Run"}
-                            </Button>
                           </div>
                         </div>
                         <AccordionContent className="px-4 pb-4">
@@ -2234,22 +2030,11 @@ setAndroidStreamUrl(null);
                             </div>
                           ) : (
                             <div className="bg-muted/30 rounded-lg p-6 text-center mt-2">
-                              <p className="text-sm text-muted-foreground mb-3">
-                                This scenario hasn't been executed yet
+                              <p className="text-sm text-muted-foreground">
+                                This scenario hasn't been executed yet.
+                                {!currentPodInstanceId && " Start a runtime to begin testing."}
+                                {currentPodInstanceId && agentStatus === "idle" && " Start the agent to execute scenarios."}
                               </p>
-                              <Button
-                                size="sm"
-                                variant="default"
-                                disabled={isScenarioDisabled}
-                                onClick={() => handleRunScenario(scenario)}
-                              >
-                                {isScenarioRunning ? (
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                ) : (
-                                  <Play className="h-4 w-4 mr-2" />
-                                )}
-                                {isScenarioRunning ? "Running" : "Run Scenario"}
-                              </Button>
                             </div>
                           )}
                         </AccordionContent>
@@ -2402,10 +2187,10 @@ setAndroidStreamUrl(null);
                     </div>
                   )}
                   <CardContent>
-                    {isLaunchingLiveRun || isLaunchingRuntime ? (
+                    {isLaunchingRuntime || isStartingAgent ? (
                       <div className="h-[220px] flex items-center justify-center text-muted-foreground gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        {isLaunchingRuntime ? "Launching runtime..." : "Launching live run..."}
+                        {isLaunchingRuntime ? "Launching runtime..." : "Starting agent..."}
                       </div>
                     ) : activeStreamUrl ? (
                       <div className="space-y-3">
@@ -2483,7 +2268,7 @@ setAndroidStreamUrl(null);
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={handleLaunchRuntime}
+                            onClick={() => handleLaunchRuntime()}
                             disabled={isLaunchingRuntime || selectedPlatform === "ios"}
                             className="h-8"
                           >
@@ -2915,14 +2700,8 @@ setAndroidStreamUrl(null);
                   </Button>
                   <Button
                     onClick={handleAddScenario}
-                    disabled={!newScenario.trim() || isLaunchingLiveRun}
-                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                    disabled={!newScenario.trim()}
                   >
-                    {isLaunchingLiveRun ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-4 w-4 mr-2" />
-                    )}
                     Save Scenario
                   </Button>
                 </DialogFooter>
@@ -2935,7 +2714,7 @@ setAndroidStreamUrl(null);
                 <DialogHeader>
                   <DialogTitle>Edit Test Scenario</DialogTitle>
                   <DialogDescription>
-                    Update the scenario description or run it immediately.
+                    Update the scenario description.
                   </DialogDescription>
                 </DialogHeader>
                 <Textarea
@@ -2955,19 +2734,40 @@ setAndroidStreamUrl(null);
                     Cancel
                   </Button>
                   <Button
-                    variant="secondary"
                     onClick={handleEditScenario}
                     disabled={!editingScenario?.name.trim()}
                   >
                     Save Scenario
                   </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Runtime Conflict Dialog */}
+            <Dialog open={isRuntimeConflictDialogOpen} onOpenChange={setIsRuntimeConflictDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Active Runtime Detected</DialogTitle>
+                  <DialogDescription>
+                    You already have a runtime running for "{activeRuntime?.suiteName || 'another test suite'}".
+                    You can only have one runtime active at a time.
+                  </DialogDescription>
+                </DialogHeader>
+                <DialogFooter>
                   <Button
-                    onClick={handleRunEditedScenario}
-                    disabled={!editingScenario?.name.trim()}
-                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                    variant="outline"
+                    onClick={() => setIsRuntimeConflictDialogOpen(false)}
                   >
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Run Now
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={async () => {
+                      setIsRuntimeConflictDialogOpen(false);
+                      await handleLaunchRuntime(true);
+                    }}
+                  >
+                    Stop Existing & Start New
                   </Button>
                 </DialogFooter>
               </DialogContent>

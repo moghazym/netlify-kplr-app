@@ -7,6 +7,7 @@ import {
 import { Settings } from "lucide-react";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProjectProvider } from "./contexts/ProjectContext";
+import { RuntimeProvider } from "./contexts/RuntimeContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AppLayout } from "./components/app/AppLayout";
 import AuthPage from "./pages/auth/AuthPage";
@@ -28,6 +29,7 @@ function App() {
   return (
     <AuthProvider>
       <ProjectProvider>
+        <RuntimeProvider>
         <Router>
         <Routes>
           <Route path="/login" element={<AuthPage />} />
@@ -71,6 +73,7 @@ function App() {
         </Routes>
         <Toaster />
       </Router>
+        </RuntimeProvider>
       </ProjectProvider>
     </AuthProvider>
   );
