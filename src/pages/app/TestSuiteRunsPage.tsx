@@ -425,6 +425,16 @@ export const TestSuiteRunsPage: React.FC = () => {
           console.log(streamLogPrefix, "connected in", connectedMs, "ms");
         } else if (["failed", "disconnected", "closed"].includes(pc.connectionState)) {
           setStreamState("error");
+          // Auto-reconnect after a short delay if it wasn't an intentional stop
+          if (isActive) {
+            console.log(streamLogPrefix, "connection lost, scheduling reconnect...");
+            retryTimer = window.setTimeout(() => {
+              if (isActive) {
+                console.log(streamLogPrefix, "attempting auto-reconnect");
+                setStreamAttempt((prev) => prev + 1);
+              }
+            }, 2000);
+          }
         }
       };
 
