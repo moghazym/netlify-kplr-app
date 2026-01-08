@@ -27,6 +27,8 @@ import {
   RotateCcw,
   Square,
   Monitor,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../../components/ui/dialog";
 import { Textarea } from "../../components/ui/textarea";
@@ -132,6 +134,7 @@ export const TestSuiteRunsPage: React.FC = () => {
   const [isResettingBrowser, setIsResettingBrowser] = useState(false);
   const [agentStatus, setAgentStatus] = useState<"idle" | "running" | "stopped">("idle");
   const [isRuntimeConflictDialogOpen, setIsRuntimeConflictDialogOpen] = useState(false);
+  const [isInteractionEnabled, setIsInteractionEnabled] = useState(false);
 
   const streamVideoRef = useRef<HTMLVideoElement | null>(null);
   const streamPcRef = useRef<RTCPeerConnection | null>(null);
@@ -256,7 +259,161 @@ export const TestSuiteRunsPage: React.FC = () => {
     streamRetryRef.current = 0;
     streamIceServersRef.current = null;
     streamSelectedPairRef.current = null;
+    setIsInteractionEnabled(false);
   }, [activeStreamUrl]);
+
+  // Client-side interaction control
+  useEffect(() => {
+    if (!isInteractionEnabled || !activeStreamUrl || selectedPlatform !== "web") return;
+
+    const video = streamVideoRef.current;
+    if (!video) return;
+
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | null = null;
+    let moveFlushTimer: number | null = null;
+    let pendingMove: any = null;
+    let isConnected = false;
+
+    // Helper to normalize coordinates
+    const getCoords = (evt: MouseEvent) => {
+      const rect = video.getBoundingClientRect();
+      const scaleX = video.videoWidth / rect.width;
+      const scaleY = video.videoHeight / rect.height;
+      return {
+        x: Math.round((evt.clientX - rect.left) * scaleX),
+        y: Math.round((evt.clientY - rect.top) * scaleY),
+      };
+    };
+
+    const send = (payload: any) => {
+      if (socket && isConnected) {
+        socket.send(JSON.stringify({ ...payload, override: "enabled" }));
+      }
+    };
+
+    const flushMove = () => {
+      if (pendingMove) {
+        send(pendingMove);
+        pendingMove = null;
+      }
+    };
+
+    const onMove = (evt: MouseEvent) => {
+      const { x, y } = getCoords(evt);
+      pendingMove = { type: "mouse", action: "move", x, y };
+      if (!moveFlushTimer) {
+        moveFlushTimer = window.setInterval(flushMove, 33); // ~30fps
+      }
+    };
+
+    const onDown = (evt: MouseEvent) => {
+      const { x, y } = getCoords(evt);
+      send({ type: "mouse", action: "down", button: evt.button, x, y });
+    };
+
+    const onUp = (evt: MouseEvent) => {
+      const { x, y } = getCoords(evt);
+      send({ type: "mouse", action: "up", button: evt.button, x, y });
+    };
+
+    const onWheel = (evt: WheelEvent) => {
+      const { x, y } = getCoords(evt as unknown as MouseEvent);
+      send({
+        type: "scroll",
+        x,
+        y,
+        deltaX: evt.deltaX,
+        deltaY: evt.deltaY,
+      });
+    };
+
+    const onKeyDown = (evt: KeyboardEvent) => {
+      if (evt.defaultPrevented) return;
+      const modifiers =
+        (evt.altKey ? 1 : 0) |
+        (evt.ctrlKey ? 2 : 0) |
+        (evt.metaKey ? 4 : 0) |
+        (evt.shiftKey ? 8 : 0);
+
+      const isPrintable = evt.key && evt.key.length === 1 && (modifiers & 0x7) === 0;
+
+      send({
+        type: "key",
+        key: evt.key,
+        code: evt.code,
+        text: isPrintable ? evt.key : "",
+        modifiers,
+        keyCode: evt.keyCode || evt.which || 0,
+        repeat: evt.repeat || false,
+      });
+
+      // Prevent default for common shortcuts to avoid browser conflicts
+      // but allow some like F5, F12
+      if (!["F5", "F12"].includes(evt.key)) {
+        evt.preventDefault();
+      }
+    };
+
+    const connect = () => {
+      try {
+        const url = new URL(activeStreamUrl);
+        url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+        const wsUrl = `${url.origin}/control-ws`;
+
+        console.log("[control] connecting to", wsUrl);
+        socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => {
+          console.log("[control] connected");
+          isConnected = true;
+          // Ensure video has focus for keyboard events
+          video.focus();
+        }; // Fixed: Added semicolon here
+
+        socket.onclose = () => {
+          console.log("[control] closed");
+          isConnected = false;
+          if (isInteractionEnabled) {
+            reconnectTimer = window.setTimeout(connect, 2000);
+          }
+        }; // Fixed: Added semicolon here
+
+        socket.onerror = (err) => {
+          console.log("[control] error", err);
+        }; // Fixed: Added semicolon here
+
+      } catch (err) {
+        console.error("[control] setup error", err);
+      }
+    }; // Fixed: Added semicolon here
+
+    // Attach listeners
+    video.addEventListener("mousemove", onMove);
+    video.addEventListener("mousedown", onDown);
+    video.addEventListener("mouseup", onUp);
+    video.addEventListener("wheel", onWheel, { passive: true });
+    video.addEventListener("keydown", onKeyDown);
+    // Make video focusable
+    video.tabIndex = 0;
+
+    // Connect WS
+    connect();
+
+    return () => {
+      isConnected = false;
+      if (socket) socket.close();
+      if (reconnectTimer) window.clearTimeout(reconnectTimer);
+      if (moveFlushTimer) window.clearInterval(moveFlushTimer);
+
+      video.removeEventListener("mousemove", onMove);
+      video.removeEventListener("mousedown", onDown);
+      video.removeEventListener("mouseup", onUp);
+      video.removeEventListener("wheel", onWheel);
+      video.removeEventListener("keydown", onKeyDown);
+      video.removeAttribute("tabindex");
+    };
+  }, [isInteractionEnabled, activeStreamUrl, selectedPlatform]);
 
   const waitForIceGatheringComplete = (pc: RTCPeerConnection, timeoutMs = 5000) => {
     if (pc.iceGatheringState === "complete") {
@@ -2212,13 +2369,21 @@ export const TestSuiteRunsPage: React.FC = () => {
                     <div className="space-y-3">
                       <div className="border rounded-lg overflow-hidden bg-black/90 relative">
                         {selectedPlatform === "web" && webStreamUrl && (
-                          <video
-                            ref={streamVideoRef}
-                            className="w-full h-[260px] object-contain"
-                            autoPlay
-                            playsInline
-                            muted
-                          />
+                          <>
+                            <video
+                              ref={streamVideoRef}
+                              className="w-full h-[260px] object-contain"
+                              autoPlay
+                              playsInline
+                              muted
+                            />
+                            {isInteractionEnabled && (
+                              <div className="absolute top-2 right-2 px-2 py-1 bg-green-500/80 text-white text-xs rounded font-medium flex items-center gap-1 shadow-sm pointer-events-none">
+                                <Unlock className="h-3 w-3" />
+                                Interactive
+                              </div>
+                            )}
+                          </>
                         )}
 
                         {selectedPlatform === "android" && androidStreamUrl && (
@@ -2273,6 +2438,29 @@ export const TestSuiteRunsPage: React.FC = () => {
                             }}
                           >
                             Reconnect
+                          </Button>
+                        )}
+                        {selectedPlatform === "web" && (
+                          <Button
+                            variant={isInteractionEnabled ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setIsInteractionEnabled(!isInteractionEnabled)}
+                            className={cn(
+                              "gap-1",
+                              isInteractionEnabled ? "bg-green-600 hover:bg-green-700" : ""
+                            )}
+                          >
+                            {isInteractionEnabled ? (
+                              <>
+                                <Unlock className="h-3 w-3" />
+                                Unlock Control
+                              </>
+                            ) : (
+                              <>
+                                <Lock className="h-3 w-3" />
+                                Control
+                              </>
+                            )}
                           </Button>
                         )}
                       </div>
