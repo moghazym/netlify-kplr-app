@@ -1465,6 +1465,7 @@ useEffect(() => {
     }
 
     setIsStartingAgent(true);
+    console.log("[TestSuiteRunsPage] Starting agent...", { suiteId, scenarios: scenarios.length });
 
     try {
       // Create a new test run for this agent execution
@@ -1497,6 +1498,7 @@ useEffect(() => {
         { run_request: runRequest },
         selectedPlatform
       );
+      console.log("[TestSuiteRunsPage] Agent start command sent successfully");
 
       setAgentStatus("running");
 
@@ -1521,7 +1523,7 @@ useEffect(() => {
         description: "Executing test scenarios...",
       });
     } catch (error) {
-      console.error("Error starting agent:", error);
+      console.error("[TestSuiteRunsPage] Error starting agent:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to start agent",
@@ -1546,6 +1548,7 @@ useEffect(() => {
     }
 
     setIsStoppingAgent(true);
+    console.log("[TestSuiteRunsPage] Stopping agent in session:", currentPodInstanceId);
 
     try {
       await stopAgentInSession(currentPodInstanceId, selectedPlatform);
