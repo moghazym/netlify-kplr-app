@@ -140,8 +140,8 @@ export const TestSuiteRunsPage: React.FC = () => {
   const streamIceServersRef = useRef<{ servers: WebrtcIceServer[]; fetchedAt: number } | null>(null);
   const ICE_SERVERS_TTL_MS = 4 * 60 * 1000;
   const MAX_STREAM_RETRIES = 6;
-    const activeStreamUrl =
-  selectedPlatform === "android" ? androidStreamUrl : webStreamUrl;
+  const activeStreamUrl =
+    selectedPlatform === "android" ? androidStreamUrl : webStreamUrl;
 
 
   // Helper function to construct full image URL from filename or path
@@ -486,14 +486,14 @@ export const TestSuiteRunsPage: React.FC = () => {
   }, [activeStreamUrl, streamAttempt, selectedPlatform]);
 
   // Android-only simple effect: treat presence of a activeStreamUrl as live
-useEffect(() => {
-  if (selectedPlatform !== "android") return;
-  if (androidStreamUrl) {
-    setStreamState("live");
-  } else {
-    setStreamState("idle");
-  }
-}, [androidStreamUrl, selectedPlatform]);
+  useEffect(() => {
+    if (selectedPlatform !== "android") return;
+    if (androidStreamUrl) {
+      setStreamState("live");
+    } else {
+      setStreamState("idle");
+    }
+  }, [androidStreamUrl, selectedPlatform]);
 
 
   const loadSuiteData = async () => {
@@ -526,7 +526,7 @@ useEffect(() => {
       if (latestTestRunResponse) {
         try {
           const fullTestRun = await getTestRun(latestTestRunResponse.id);
-          
+
           // Set platform if available in test run
           if (fullTestRun.platform) {
             const platformLower = fullTestRun.platform.toLowerCase();
@@ -534,9 +534,9 @@ useEffect(() => {
               setSelectedPlatform(platformLower as "web" | "ios" | "android");
             }
           }
-          
+
           const mappedScenarios = mapTestRunToScenarios(fullTestRun, false);
-          
+
           // Merge with scenarios from API to preserve scenario names
           const mergedScenarios = mappedScenarios.map(mapped => {
             const apiScenario = scenariosData.find(s => s.id.toString() === mapped.id);
@@ -551,12 +551,12 @@ useEffect(() => {
           const scenariosWithoutRun = scenariosData
             .filter(s => !scenarioIdsWithRun.has(s.id.toString()))
             .map(scenario => ({
-        id: scenario.id.toString(),
-        name: scenario.name,
-        status: "pending" as const,
-        hasRun: false,
-        steps: [],
-      }));
+              id: scenario.id.toString(),
+              name: scenario.name,
+              status: "pending" as const,
+              hasRun: false,
+              steps: [],
+            }));
 
           setScenarios([...mergedScenarios, ...scenariosWithoutRun]);
 
@@ -577,7 +577,7 @@ useEffect(() => {
             hasRun: false,
             steps: [],
           }));
-      setScenarios(transformedScenarios);
+          setScenarios(transformedScenarios);
         }
       } else {
         // No test run exists, just show scenarios
@@ -680,7 +680,7 @@ useEffect(() => {
 
     const suiteIdNum = parseInt(suiteId, 10);
     const scenarioIdNum = parseInt(deletingScenario.id, 10);
-    
+
     if (isNaN(suiteIdNum) || isNaN(scenarioIdNum)) {
       toast({
         title: "Error",
@@ -822,7 +822,7 @@ useEffect(() => {
         // Determine scenario status based on steps
         // Scenario stays "running" while test is active, only show final status when test run is complete
         let scenarioStatus: "pending" | "running" | "passed" | "failed" = "running";
-        
+
         // First check test run status and scenario status if test run is complete
         if (isTestRunComplete) {
           // Check test run status first
@@ -832,7 +832,7 @@ useEffect(() => {
               scenarioStatus = "failed";
             }
           }
-          
+
           // Also check scenario status
           if (scenarioStatus === "running" && apiScenario.status) {
             const apiStatus = (apiScenario.status as string).toLowerCase();
@@ -843,7 +843,7 @@ useEffect(() => {
             }
           }
         }
-        
+
         // If status not determined from API, check steps
         if (scenarioStatus === "running" && steps.length > 0) {
           const lastStep = steps[steps.length - 1];
@@ -872,7 +872,7 @@ useEffect(() => {
                   scenarioStatus = "failed";
                 }
               }
-              
+
               // If still running, check scenario API status
               if (scenarioStatus === "running" && apiScenario.status) {
                 const apiStatus = (apiScenario.status as string).toLowerCase();
@@ -880,7 +880,7 @@ useEffect(() => {
                   scenarioStatus = "failed";
                 }
               }
-              
+
               // If still running, check executed steps for errors
               if (scenarioStatus === "running") {
                 const executedStep = steps.find(s => !!(s.beforeScreenshot || s.afterScreenshot || s.reasoning));
@@ -1012,7 +1012,7 @@ useEffect(() => {
         // Determine scenario status based on steps
         // Scenario stays "running" while test is active, only show final status when test run is complete
         let scenarioStatus: "pending" | "running" | "passed" | "failed" = "running";
-        
+
         // First check session status and test run status if test run is complete
         if (isTestRunComplete) {
           // Check session status first (this is the primary indicator)
@@ -1024,7 +1024,7 @@ useEffect(() => {
               scenarioStatus = "passed";
             }
           }
-          
+
           // Also check test run status as fallback
           if (scenarioStatus === "running" && testRun.status) {
             const testRunStatus = (testRun.status as string).toLowerCase();
@@ -1043,7 +1043,7 @@ useEffect(() => {
             }
           }
         }
-        
+
         // If status not determined from API, check steps
         if (scenarioStatus === "running" && steps.length > 0) {
           const lastStep = steps[steps.length - 1];
@@ -1074,7 +1074,7 @@ useEffect(() => {
                   scenarioStatus = "passed";
                 }
               }
-              
+
               // If still running, check test run status
               if (scenarioStatus === "running" && testRun.status) {
                 const testRunStatus = (testRun.status as string).toLowerCase();
@@ -1082,7 +1082,7 @@ useEffect(() => {
                   scenarioStatus = "failed";
                 }
               }
-              
+
               // If still running, check scenario status
               if (scenarioStatus === "running" && session.scenario?.status) {
                 const apiStatus = (session.scenario.status as string).toLowerCase();
@@ -1090,7 +1090,7 @@ useEffect(() => {
                   scenarioStatus = "failed";
                 }
               }
-              
+
               // If still running, check executed steps for errors
               if (scenarioStatus === "running") {
                 const executedStep = steps.find(s => !!(s.beforeScreenshot || s.afterScreenshot || s.reasoning));
@@ -1203,13 +1203,13 @@ useEffect(() => {
           setCurrentPodInstanceId(null);
         }
         setCurrentTestRunId(null);
-        
+
         // Do one final poll after a short delay to ensure all data is available
         setTimeout(async () => {
           try {
             const finalTestRun = await getTestRun(testRunId);
             const finalMappedScenarios = mapTestRunToScenarios(finalTestRun, false);
-            
+
             // Update with final complete data
             setScenarios(prevScenarios => {
               const finalScenarios = finalMappedScenarios.map(mapped => {
@@ -1219,10 +1219,10 @@ useEffect(() => {
                   name: existing?.name || mapped.name, // Preserve original name
                 };
               });
-              
+
               const existingIds = new Set(finalMappedScenarios.map(m => m.id));
               const additional = prevScenarios.filter(s => !existingIds.has(s.id));
-              
+
               return [...finalScenarios, ...additional];
             });
           } catch (error) {
@@ -1247,10 +1247,10 @@ useEffect(() => {
               name: existing?.name || mapped.name, // Preserve original name
             };
           });
-          
+
           const existingIds = new Set(mappedScenarios.map(m => m.id));
           const additional = prevScenarios.filter(s => !existingIds.has(s.id));
-          
+
           return [...updatedScenarios, ...additional];
         });
       }
@@ -1718,468 +1718,447 @@ useEffect(() => {
 
   return (
     <div className="space-y-6">
-        {isLoadingData ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          </div>
-        ) : !suiteInfo ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground mb-4">Test suite not found</p>
-            <Button onClick={() => navigate("/test-suites")} variant="outline">
-              Back to Test Suites
-            </Button>
-          </div>
-        ) : (
-          <>
-            {/* Header */}
-            <div className="flex items-center justify-between mt-4">
-                <div className="flex items-center gap-3">
-                  <Button variant="ghost" size="sm" onClick={() => navigate("/test-suites")} className="text-muted-foreground hover:text-foreground">
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back
-                  </Button>
-                <div className="flex flex-col">
-                  <h2 className="text-2xl font-bold">{suiteInfo.name}</h2>
-                  {suiteInfo.application_url && (
-                    <a 
-                      href={suiteInfo.application_url} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-sm text-muted-foreground hover:text-foreground mt-1 flex items-center gap-1"
-                    >
-                      <ExternalLink className="h-3 w-3" />
-                      {suiteInfo.application_url}
-                    </a>
-                  )}
-                </div>
-                </div>
-                <div className="flex gap-3">
-                  <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)} className="rounded-lg">
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Share
-                  </Button>
-                  {/* Runtime/Agent Controls */}
-                  {!currentPodInstanceId ? (
-                    <Button
-                      size="sm"
-                      onClick={() => handleLaunchRuntime()}
-                      disabled={isLaunchingRuntime || selectedPlatform === "ios"}
-                      className="bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
-                    >
-                      {isLaunchingRuntime ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Starting Runtime...
-                        </>
-                      ) : (
-                        <>
-                          <Monitor className="h-4 w-4 mr-2" />
-                          Start Runtime
-                        </>
-                      )}
-                    </Button>
-                  ) : agentStatus === "running" ? (
-                    <Button
-                      size="sm"
-                      onClick={handleStopAgent}
-                      disabled={isStoppingAgent}
-                      className="bg-amber-500 hover:bg-amber-600 text-white rounded-lg"
-                    >
-                      {isStoppingAgent ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Stopping...
-                        </>
-                      ) : (
-                        <>
-                          <Square className="h-4 w-4 mr-2" />
-                          Stop Agent
-                        </>
-                      )}
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={handleStartAgent}
-                      disabled={isStartingAgent || scenarios.length === 0}
-                      className="bg-green-500 hover:bg-green-600 text-white rounded-lg"
-                    >
-                      {isStartingAgent ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Starting Agent...
-                        </>
-                      ) : (
-                        <>
-                          <Play className="h-4 w-4 mr-2" />
-                          Start Agent
-                        </>
-                      )}
-                    </Button>
-                  )}
+      {isLoadingData ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : !suiteInfo ? (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground mb-4">Test suite not found</p>
+          <Button onClick={() => navigate("/test-suites")} variant="outline">
+            Back to Test Suites
+          </Button>
+        </div>
+      ) : (
+        <>
+          {/* Header */}
+          <div className="flex items-center justify-between mt-4">
+            <div className="flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/test-suites")} className="text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back
+              </Button>
+              <div className="flex flex-col">
+                <h2 className="text-2xl font-bold">{suiteInfo.name}</h2>
+                {suiteInfo.application_url && (
+                  <a
+                    href={suiteInfo.application_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-muted-foreground hover:text-foreground mt-1 flex items-center gap-1"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    {suiteInfo.application_url}
+                  </a>
+                )}
               </div>
             </div>
+            <div className="flex gap-3">
+              <Button variant="outline" size="sm" onClick={() => setIsShareDialogOpen(true)} className="rounded-lg">
+                <Share2 className="h-4 w-4 mr-2" />
+                Share
+              </Button>
+              {/* Runtime/Agent Controls */}
+              {!currentPodInstanceId ? (
+                <Button
+                  size="sm"
+                  onClick={() => handleLaunchRuntime()}
+                  disabled={isLaunchingRuntime || selectedPlatform === "ios"}
+                  className="bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
+                >
+                  {isLaunchingRuntime ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Starting Runtime...
+                    </>
+                  ) : (
+                    <>
+                      <Monitor className="h-4 w-4 mr-2" />
+                      Start Runtime
+                    </>
+                  )}
+                </Button>
+              ) : agentStatus === "running" ? (
+                <Button
+                  size="sm"
+                  onClick={handleStopAgent}
+                  disabled={isStoppingAgent}
+                  className="bg-amber-500 hover:bg-amber-600 text-white rounded-lg"
+                >
+                  {isStoppingAgent ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Stopping...
+                    </>
+                  ) : (
+                    <>
+                      <Square className="h-4 w-4 mr-2" />
+                      Stop Agent
+                    </>
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={handleStartAgent}
+                  disabled={isStartingAgent || scenarios.length === 0}
+                  className="bg-green-500 hover:bg-green-600 text-white rounded-lg"
+                >
+                  {isStartingAgent ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Starting Agent...
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4 mr-2" />
+                      Start Agent
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
 
-            <Separator className="mt-6 mb-4" />
+          <Separator className="mt-6 mb-4" />
 
-            {/* Platform Tabs */}
-            <Card className="bg-white rounded-lg">
+          {/* Platform Tabs */}
+          <Card className="bg-white rounded-lg">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 w-full">
+                <button
+                  onClick={() => setSelectedPlatform("web")}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm font-medium flex-1",
+                    selectedPlatform === "web"
+                      ? "bg-muted text-foreground"
+                      : "bg-transparent text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Globe className={cn("h-3.5 w-3.5", selectedPlatform === "web" ? "text-blue-500" : "text-muted-foreground")} />
+                  <span>Web</span>
+                </button>
+                <button
+                  onClick={() => setSelectedPlatform("ios")}
+                  disabled={true}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm font-medium flex-1",
+                    selectedPlatform === "ios"
+                      ? "bg-muted text-foreground"
+                      : "bg-transparent text-muted-foreground hover:text-foreground",
+                    "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  <Smartphone className={cn("h-3.5 w-3.5", selectedPlatform === "ios" ? "text-blue-500" : "text-muted-foreground")} />
+                  <span>iOS (Coming Soon)</span>
+                </button>
+                <button
+                  onClick={() => setSelectedPlatform("android")}
+                  className={cn(
+                    "flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm font-medium flex-1",
+                    selectedPlatform === "android"
+                      ? "bg-muted text-foreground"
+                      : "bg-transparent text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Smartphone className={cn("h-3.5 w-3.5", selectedPlatform === "android" ? "text-blue-500" : "text-muted-foreground")} />
+                  <span>Android</span>
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Completion Banner */}
+          {showCompletionBanner && lastRunStats && (
+            <Card className="bg-primary/5 border-primary/20">
               <CardContent className="p-4">
-                <div className="flex items-center gap-2 w-full">
-                  <button
-                    onClick={() => setSelectedPlatform("web")}
-                    className={cn(
-                      "flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm font-medium flex-1",
-                      selectedPlatform === "web"
-                        ? "bg-muted text-foreground"
-                        : "bg-transparent text-muted-foreground hover:text-foreground"
-                    )}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-primary" />
+                    <div>
+                      <p className="font-medium">Test Run Complete!</p>
+                      <p className="text-sm text-muted-foreground">
+                        {lastRunStats.passed} passed, {lastRunStats.failed} failed out of {lastRunStats.total} scenarios
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => navigate('/test-runs')}
                   >
-                    <Globe className={cn("h-3.5 w-3.5", selectedPlatform === "web" ? "text-blue-500" : "text-muted-foreground")} />
-                    <span>Web</span>
-                  </button>
-                  <button
-                    onClick={() => setSelectedPlatform("ios")}
-                    disabled={true}
-                    className={cn(
-                      "flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm font-medium flex-1",
-                      selectedPlatform === "ios"
-                        ? "bg-muted text-foreground"
-                        : "bg-transparent text-muted-foreground hover:text-foreground",
-                      "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    <Smartphone className={cn("h-3.5 w-3.5", selectedPlatform === "ios" ? "text-blue-500" : "text-muted-foreground")} />
-                    <span>iOS (Coming Soon)</span>
-                  </button>
-                  <button
-                    onClick={() => setSelectedPlatform("android")}
-                    className={cn(
-                      "flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg transition-all text-sm font-medium flex-1",
-                      selectedPlatform === "android"
-                        ? "bg-muted text-foreground"
-                        : "bg-transparent text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    <Smartphone className={cn("h-3.5 w-3.5", selectedPlatform === "android" ? "text-blue-500" : "text-muted-foreground")} />
-                    <span>Android</span>
-                  </button>
+                    View Test Runs
+                    <ExternalLink className="h-4 w-4 ml-2" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>
+          )}
 
-            {/* Completion Banner */}
-            {showCompletionBanner && lastRunStats && (
-              <Card className="bg-primary/5 border-primary/20">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle2 className="h-5 w-5 text-primary" />
-                      <div>
-                        <p className="font-medium">Test Run Complete!</p>
-                        <p className="text-sm text-muted-foreground">
-                          {lastRunStats.passed} passed, {lastRunStats.failed} failed out of {lastRunStats.total} scenarios
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={() => navigate('/test-runs')}
+          {/* Two Column Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column - Scenarios List */}
+            <div className="space-y-4">
+              <Accordion
+                type="single"
+                collapsible
+                className="space-y-3"
+                value={expandedScenarioId}
+                onValueChange={setExpandedScenarioId}
+              >
+                {scenarios.map((scenario) => {
+                  return (
+                    <AccordionItem
+                      key={scenario.id}
+                      value={`scenario-${scenario.id}`}
+                      className="!border rounded-lg overflow-hidden"
                     >
-                      View Test Runs
-                      <ExternalLink className="h-4 w-4 ml-2" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Two Column Layout */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left Column - Scenarios List */}
-              <div className="space-y-4">
-                <Accordion
-                  type="single"
-                  collapsible
-                  className="space-y-3"
-                  value={expandedScenarioId}
-                  onValueChange={setExpandedScenarioId}
-                >
-                  {scenarios.map((scenario) => {
-                    return (
-                      <AccordionItem
-                        key={scenario.id}
-                        value={`scenario-${scenario.id}`}
-                        className="!border rounded-lg overflow-hidden"
-                      >
-                        <div className="flex items-center gap-2">
-                          <AccordionTrigger
-                            className="px-4 hover:no-underline flex-1"
-                            onClick={() => {
-                              setSelectedScenario(scenario.id);
-                              // Reset screenshot carousel when selecting a scenario
-                              setCurrentScreenshotIndex(0);
-                              setSelectedStepIndex(0);
-                            }}
-                          >
-                            <div className="flex items-start gap-3 text-left flex-1 min-w-0">
-                              <div className="flex-shrink-0 pt-0.5">
-                                {getStatusIcon(scenario.status, "large")}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <span className="text-sm font-medium break-words block">{scenario.name}</span>
-                              </div>
+                      <div className="flex items-center gap-2">
+                        <AccordionTrigger
+                          className="px-4 hover:no-underline flex-1"
+                          onClick={() => {
+                            setSelectedScenario(scenario.id);
+                            // Reset screenshot carousel when selecting a scenario
+                            setCurrentScreenshotIndex(0);
+                            setSelectedStepIndex(0);
+                          }}
+                        >
+                          <div className="flex items-start gap-3 text-left flex-1 min-w-0">
+                            <div className="flex-shrink-0 pt-0.5">
+                              {getStatusIcon(scenario.status, "large")}
                             </div>
-                          </AccordionTrigger>
-                          <div className="flex items-center gap-2 pr-4">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 w-7 p-0"
-                                    onClick={() => {
-                                      setEditingScenario({ id: scenario.id, name: scenario.name });
-                                      setIsEditDialogOpen(true);
-                                    }}
-                                  >
-                                    <Pencil className="h-3 w-3" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Edit Scenario</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    onClick={() => {
-                                      setDeletingScenario({ id: scenario.id, name: scenario.name });
-                                      setIsDeleteDialogOpen(true);
-                                    }}
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Delete Scenario</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-
-                            {scenario.status === 'failed' && (
-                              <TooltipProvider>
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      className="h-7 w-7 p-0 text-destructive hover:text-destructive"
-                                    >
-                                      <Bug className="h-3 w-3" />
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>Create Bug Ticket</p>
-                                  </TooltipContent>
-                                </Tooltip>
-                              </TooltipProvider>
-                            )}
+                            <div className="flex-1 min-w-0">
+                              <span className="text-sm font-medium break-words block">{scenario.name}</span>
+                            </div>
                           </div>
-                        </div>
-                        <AccordionContent className="px-4 pb-4">
-                          {scenario.hasRun ? (
-                            <div className="space-y-2">
-                              {[...scenario.steps].sort((a, b) => a.id - b.id).map((step, index) => (
-                                  <div
-                                    key={step.id}
-                                    className={cn(
-                                      "flex items-start gap-3 p-3 rounded transition-all cursor-pointer",
-                                      selectedStepIndex === index ? 'bg-muted/50' : 'bg-muted/30 hover:bg-muted/50'
-                                    )}
-                                    onClick={() => {
-                                        setSelectedStepIndex(index);
-                                        // Reset screenshot carousel when selecting a new step
-                                        const sortedSteps = [...scenario.steps].sort((a, b) => a.id - b.id);
-                                        const stepsWithScreenshots = sortedSteps.filter(
-                                          s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
-                                        );
-                                        const newIndex = stepsWithScreenshots.findIndex(s => s.id === step.id);
-                                        if (newIndex >= 0) {
-                                          setCurrentScreenshotIndex(newIndex);
-                                      }
-                                    }}
+                        </AccordionTrigger>
+                        <div className="flex items-center gap-2 pr-4">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0"
+                                  onClick={() => {
+                                    setEditingScenario({ id: scenario.id, name: scenario.name });
+                                    setIsEditDialogOpen(true);
+                                  }}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Edit Scenario</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 w-7 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => {
+                                    setDeletingScenario({ id: scenario.id, name: scenario.name });
+                                    setIsDeleteDialogOpen(true);
+                                  }}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>Delete Scenario</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+
+                          {scenario.status === 'failed' && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0 text-destructive hover:text-destructive"
                                   >
-                                    <div className="flex-shrink-0 mt-0.5">
-                                    {getStatusIcon(step.status)}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="text-sm font-medium">
-                                        {step.action}
-                                      </p>
-                                    {step.reasoning && (
-                                        <p className="text-xs text-muted-foreground mt-2 italic">
-                                          {step.reasoning}
-                                        </p>
-                                      )}
-                                    </div>
-                                  </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <div className="bg-muted/30 rounded-lg p-6 text-center mt-2">
-                              <p className="text-sm text-muted-foreground">
-                                This scenario hasn't been executed yet.
-                                {!currentPodInstanceId && " Start a runtime to begin testing."}
-                                {currentPodInstanceId && agentStatus === "idle" && " Start the agent to execute scenarios."}
-                              </p>
-                            </div>
+                                    <Bug className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Create Bug Ticket</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           )}
-                        </AccordionContent>
-                      </AccordionItem>
-                    );
-                  })}
-                </Accordion>
-
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setIsAddDialogOpen(true)}
-                >
-                  Add Test Scenarios
-                </Button>
-              </div>
-
-              {/* Right Column - Details */}
-              <div className="space-y-4">
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-base">Live Execution</CardTitle>
-                    <div className="flex items-center gap-2">
-                      {/* Status Badge */}
-                      {selectedPlatform === "android" && androidStreamUrl ? (
-                        <Badge variant="outline" className="flex items-center gap-1 text-green-600">
-                          <span className="h-2 w-2 rounded-full bg-green-500" />
-                          Live
-                        </Badge>
-                      ) : streamState === "live" ? (
-                        <Badge variant="outline" className="flex items-center gap-1 text-green-600">
-                          <span className="h-2 w-2 rounded-full bg-green-500" />
-                          Live
-                        </Badge>
-                      ) : streamState === "connecting" ? (
-                        <Badge variant="outline" className="text-amber-600">Connecting</Badge>
-                      ) : activeStreamUrl ? (
-                        <Badge variant="outline" className="text-red-600">Disconnected</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">Idle</Badge>
-                      )}
-
-                      {/* Agent Status Badge (only show in decoupled mode) */}
-                      {isRuntimeOnly && currentPodInstanceId && (
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            "flex items-center gap-1",
-                            agentStatus === "running" ? "text-blue-600" :
-                            agentStatus === "stopped" ? "text-amber-600" :
-                            "text-muted-foreground"
-                          )}
-                        >
-                          {agentStatus === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
-                          Agent: {agentStatus}
-                        </Badge>
-                      )}
-                    </div>
-                  </CardHeader>
-
-                  {/* Runtime Controls - Show when runtime is active */}
-                  {currentPodInstanceId && isRuntimeOnly && (
-                    <div className="px-6 pb-3">
-                      <div className="flex flex-wrap items-center gap-2">
-                        {/* Start/Stop Agent Button */}
-                        {agentStatus === "running" ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleStopAgent}
-                            disabled={isStoppingAgent}
-                            className="h-7"
-                          >
-                            {isStoppingAgent ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Square className="h-3 w-3" />
-                            )}
-                            <span className="ml-1">Stop Agent</span>
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="default"
-                            onClick={handleStartAgent}
-                            disabled={isStartingAgent || scenarios.length === 0}
-                            className="h-7 bg-green-600 hover:bg-green-700"
-                          >
-                            {isStartingAgent ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Play className="h-3 w-3" />
-                            )}
-                            <span className="ml-1">Start Agent</span>
-                          </Button>
-                        )}
-
-                        {/* Reset Browser Button */}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={handleResetBrowser}
-                          disabled={isResettingBrowser || agentStatus === "running"}
-                          className="h-7"
-                        >
-                          {isResettingBrowser ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <RotateCcw className="h-3 w-3" />
-                          )}
-                          <span className="ml-1">Reset Browser</span>
-                        </Button>
-
-                        {/* Stop Runtime Button */}
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={handleStopRuntime}
-                          disabled={isStoppingSession}
-                          className="h-7"
-                        >
-                          {isStoppingSession ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <XCircle className="h-3 w-3" />
-                          )}
-                          <span className="ml-1">Stop Runtime</span>
-                        </Button>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                      <AccordionContent className="px-4 pb-4">
+                        {scenario.hasRun ? (
+                          <div className="space-y-2">
+                            {[...scenario.steps].sort((a, b) => a.id - b.id).map((step, index) => (
+                              <div
+                                key={step.id}
+                                className={cn(
+                                  "flex items-start gap-3 p-3 rounded transition-all cursor-pointer",
+                                  selectedStepIndex === index ? 'bg-muted/50' : 'bg-muted/30 hover:bg-muted/50'
+                                )}
+                                onClick={() => {
+                                  setSelectedStepIndex(index);
+                                  // Reset screenshot carousel when selecting a new step
+                                  const sortedSteps = [...scenario.steps].sort((a, b) => a.id - b.id);
+                                  const stepsWithScreenshots = sortedSteps.filter(
+                                    s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
+                                  );
+                                  const newIndex = stepsWithScreenshots.findIndex(s => s.id === step.id);
+                                  if (newIndex >= 0) {
+                                    setCurrentScreenshotIndex(newIndex);
+                                  }
+                                }}
+                              >
+                                <div className="flex-shrink-0 mt-0.5">
+                                  {getStatusIcon(step.status)}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium">
+                                    {step.action}
+                                  </p>
+                                  {step.reasoning && (
+                                    <p className="text-xs text-muted-foreground mt-2 italic">
+                                      {step.reasoning}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="bg-muted/30 rounded-lg p-6 text-center mt-2">
+                            <p className="text-sm text-muted-foreground">
+                              This scenario hasn't been executed yet.
+                              {!currentPodInstanceId && " Start a runtime to begin testing."}
+                              {currentPodInstanceId && agentStatus === "idle" && " Start the agent to execute scenarios."}
+                            </p>
+                          </div>
+                        )}
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
 
-                  {/* Legacy Stop Button - Show for non-decoupled mode */}
-                  {currentPodInstanceId && !isRuntimeOnly && (
-                    <div className="px-6 pb-3">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setIsAddDialogOpen(true)}
+              >
+                Add Test Scenarios
+              </Button>
+            </div>
+
+            {/* Right Column - Details */}
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-base">Live Execution</CardTitle>
+                  <div className="flex items-center gap-2">
+                    {/* Status Badge */}
+                    {selectedPlatform === "android" && androidStreamUrl ? (
+                      <Badge variant="outline" className="flex items-center gap-1 text-green-600">
+                        <span className="h-2 w-2 rounded-full bg-green-500" />
+                        Live
+                      </Badge>
+                    ) : streamState === "live" ? (
+                      <Badge variant="outline" className="flex items-center gap-1 text-green-600">
+                        <span className="h-2 w-2 rounded-full bg-green-500" />
+                        Live
+                      </Badge>
+                    ) : streamState === "connecting" ? (
+                      <Badge variant="outline" className="text-amber-600">Connecting</Badge>
+                    ) : activeStreamUrl ? (
+                      <Badge variant="outline" className="text-red-600">Disconnected</Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-muted-foreground">Idle</Badge>
+                    )}
+
+                    {/* Agent Status Badge (only show in decoupled mode) */}
+                    {isRuntimeOnly && currentPodInstanceId && (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "flex items-center gap-1",
+                          agentStatus === "running" ? "text-blue-600" :
+                            agentStatus === "stopped" ? "text-amber-600" :
+                              "text-muted-foreground"
+                        )}
+                      >
+                        {agentStatus === "running" && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
+                        Agent: {agentStatus}
+                      </Badge>
+                    )}
+                  </div>
+                </CardHeader>
+
+                {/* Runtime Controls - Show when runtime is active */}
+                {currentPodInstanceId && isRuntimeOnly && (
+                  <div className="px-6 pb-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Start/Stop Agent Button */}
+                      {agentStatus === "running" ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleStopAgent}
+                          disabled={isStoppingAgent}
+                          className="h-7"
+                        >
+                          {isStoppingAgent ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Square className="h-3 w-3" />
+                          )}
+                          <span className="ml-1">Stop Agent</span>
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={handleStartAgent}
+                          disabled={isStartingAgent || scenarios.length === 0}
+                          className="h-7 bg-green-600 hover:bg-green-700"
+                        >
+                          {isStartingAgent ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Play className="h-3 w-3" />
+                          )}
+                          <span className="ml-1">Start Agent</span>
+                        </Button>
+                      )}
+
+                      {/* Reset Browser Button */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleResetBrowser}
+                        disabled={isResettingBrowser || agentStatus === "running"}
+                        className="h-7"
+                      >
+                        {isResettingBrowser ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <RotateCcw className="h-3 w-3" />
+                        )}
+                        <span className="ml-1">Reset Browser</span>
+                      </Button>
+
+                      {/* Stop Runtime Button */}
                       <Button
                         size="sm"
                         variant="destructive"
-                        onClick={handleStopSession}
+                        onClick={handleStopRuntime}
                         disabled={isStoppingSession}
                         className="h-7"
                       >
@@ -2188,698 +2167,719 @@ useEffect(() => {
                         ) : (
                           <XCircle className="h-3 w-3" />
                         )}
-                        <span className="ml-1">Stop</span>
+                        <span className="ml-1">Stop Runtime</span>
                       </Button>
                     </div>
-                  )}
-                  <CardContent>
-                    {isLaunchingRuntime || isStartingAgent ? (
-                      <div className="h-[220px] flex items-center justify-center text-muted-foreground gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        {isLaunchingRuntime ? "Launching runtime..." : "Starting agent..."}
-                      </div>
-                    ) : activeStreamUrl ? (
-                      <div className="space-y-3">
-<div className="border rounded-lg overflow-hidden bg-black/90 relative">
-  {selectedPlatform === "web" && webStreamUrl && (
-    <video
-      ref={streamVideoRef}
-      className="w-full h-[260px] object-contain"
-      autoPlay
-      playsInline
-      muted
-    />
-  )}
+                  </div>
+                )}
 
-  {selectedPlatform === "android" && androidStreamUrl && (
-    <iframe
-      key={androidStreamUrl}
-      src={androidStreamUrl}
-      className="w-full h-[260px] bg-black"
-      allow="autoplay; fullscreen"
-      referrerPolicy="no-referrer"
-      onLoad={(e) => {
-        try {
-          const doc = e.currentTarget.contentDocument;
-          if (!doc) return;
-
-          const deviceView = doc.querySelector(".device-view") as HTMLElement | null;
-          if (!deviceView) return;
-
-          doc.body.innerHTML = "";
-          doc.body.style.margin = "0";
-          doc.body.style.background = "black";
-          doc.body.style.display = "flex";
-          doc.body.style.justifyContent = "center";
-          doc.body.style.alignItems = "center";
-          doc.body.style.width = "100%";
-          doc.body.style.height = "100%";
-          doc.body.appendChild(deviceView);
-
-          deviceView.style.overflow = "hidden";
-        } catch {
-          // ignore cross-origin
-        }
-      }}
-    />
-  )}
-</div>
-
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.open(activeStreamUrl, "_blank")}
-                          >
-                            Open in new tab
-                          </Button>
-                          {selectedPlatform === "web" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => {
-                                streamRetryRef.current = 0;
-                                setStreamAttempt((prev) => prev + 1);
-                              }}
-                            >
-                              Reconnect
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="h-[220px] flex flex-col items-center justify-center text-muted-foreground gap-4">
-                        <p>No active runtime session.</p>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleLaunchRuntime()}
-                            disabled={isLaunchingRuntime || selectedPlatform === "ios"}
-                            className="h-8"
-                          >
-                            {isLaunchingRuntime ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                              <Monitor className="h-4 w-4 mr-2" />
-                            )}
-                            Start Runtime Only
-                          </Button>
-                          <span className="text-xs text-muted-foreground">or</span>
-                          <span className="text-xs">Run a scenario above</span>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-                {selectedScenarioData ? (
-                  <>
-                    {/* Screenshots */}
-                    <Card>
-                      <CardHeader className="flex flex-row items-center justify-between">
-                        <CardTitle className="text-base">Screenshots</CardTitle>
-                        {selectedPlatform && (
-                          <Badge variant="outline" className="flex items-center gap-1">
-                            {selectedPlatform === 'web' ? (
-                              <Globe className="w-3 h-3" />
-                            ) : (
-                              <Smartphone className="w-3 h-3" />
-                            )}
-                            {selectedPlatform === 'web' ? 'Web' : selectedPlatform === 'ios' ? 'iOS' : 'Android'}
-                          </Badge>
+                {/* Legacy Stop Button - Show for non-decoupled mode */}
+                {currentPodInstanceId && !isRuntimeOnly && (
+                  <div className="px-6 pb-3">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleStopSession}
+                      disabled={isStoppingSession}
+                      className="h-7"
+                    >
+                      {isStoppingSession ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <XCircle className="h-3 w-3" />
+                      )}
+                      <span className="ml-1">Stop</span>
+                    </Button>
+                  </div>
+                )}
+                <CardContent>
+                  {isLaunchingRuntime ? (
+                    <div className="h-[220px] flex items-center justify-center text-muted-foreground gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Launching runtime...
+                    </div>
+                  ) : activeStreamUrl ? (
+                    <div className="space-y-3">
+                      <div className="border rounded-lg overflow-hidden bg-black/90 relative">
+                        {selectedPlatform === "web" && webStreamUrl && (
+                          <video
+                            ref={streamVideoRef}
+                            className="w-full h-[260px] object-contain"
+                            autoPlay
+                            playsInline
+                            muted
+                          />
                         )}
-                      </CardHeader>
-                      <CardContent>
-                        {(() => {
-                          const stepsWithScreenshots = selectedScenarioData.steps.filter(
-                            s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
-                          );
 
-                          if (stepsWithScreenshots.length === 0) {
-                            return (
-                              <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                                No screenshots available yet
-                              </div>
-                            );
-                          }
+                        {selectedPlatform === "android" && androidStreamUrl && (
+                          <iframe
+                            key={androidStreamUrl}
+                            src={androidStreamUrl}
+                            className="w-full h-[260px] bg-black"
+                            allow="autoplay; fullscreen"
+                            referrerPolicy="no-referrer"
+                            onLoad={(e) => {
+                              try {
+                                const doc = e.currentTarget.contentDocument;
+                                if (!doc) return;
 
-                          const currentStep = stepsWithScreenshots[currentScreenshotIndex];
+                                const deviceView = doc.querySelector(".device-view") as HTMLElement | null;
+                                if (!deviceView) return;
 
+                                doc.body.innerHTML = "";
+                                doc.body.style.margin = "0";
+                                doc.body.style.background = "black";
+                                doc.body.style.display = "flex";
+                                doc.body.style.justifyContent = "center";
+                                doc.body.style.alignItems = "center";
+                                doc.body.style.width = "100%";
+                                doc.body.style.height = "100%";
+                                doc.body.appendChild(deviceView);
+
+                                deviceView.style.overflow = "hidden";
+                              } catch {
+                                // ignore cross-origin
+                              }
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(activeStreamUrl, "_blank")}
+                        >
+                          Open in new tab
+                        </Button>
+                        {selectedPlatform === "web" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              streamRetryRef.current = 0;
+                              setStreamAttempt((prev) => prev + 1);
+                            }}
+                          >
+                            Reconnect
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-[220px] flex flex-col items-center justify-center text-muted-foreground gap-4">
+                      <p>No active runtime session.</p>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleLaunchRuntime()}
+                          disabled={isLaunchingRuntime || selectedPlatform === "ios"}
+                          className="h-8"
+                        >
+                          {isLaunchingRuntime ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Monitor className="h-4 w-4 mr-2" />
+                          )}
+                          Start Runtime Only
+                        </Button>
+                        <span className="text-xs text-muted-foreground">or</span>
+                        <span className="text-xs">Run a scenario above</span>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+              {selectedScenarioData ? (
+                <>
+                  {/* Screenshots */}
+                  <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                      <CardTitle className="text-base">Screenshots</CardTitle>
+                      {selectedPlatform && (
+                        <Badge variant="outline" className="flex items-center gap-1">
+                          {selectedPlatform === 'web' ? (
+                            <Globe className="w-3 h-3" />
+                          ) : (
+                            <Smartphone className="w-3 h-3" />
+                          )}
+                          {selectedPlatform === 'web' ? 'Web' : selectedPlatform === 'ios' ? 'iOS' : 'Android'}
+                        </Badge>
+                      )}
+                    </CardHeader>
+                    <CardContent>
+                      {(() => {
+                        const stepsWithScreenshots = selectedScenarioData.steps.filter(
+                          s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
+                        );
+
+                        if (stepsWithScreenshots.length === 0) {
                           return (
-                            <div className="space-y-4">
-                              {/* Step Info */}
-                              <div className="flex items-center justify-between">
-                                <div className="text-sm font-medium">
-                                  {currentStep.action}
-                                </div>
-                                {stepsWithScreenshots.length > 1 && (
-                                  <div className="flex items-center gap-2">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => {
-                                        const newIndex = currentScreenshotIndex > 0 ? currentScreenshotIndex - 1 : stepsWithScreenshots.length - 1;
-                                        setCurrentScreenshotIndex(newIndex);
-                                        // Sync selectedStepIndex with the current screenshot step
-                                        const currentStep = stepsWithScreenshots[newIndex];
-                                        if (currentStep) {
-                                          const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
-                                          if (actualStepIndex >= 0) {
-                                            setSelectedStepIndex(actualStepIndex);
-                                          }
-                                        }
-                                      }}
-                                      className="h-8 w-8 p-0"
-                                    >
-                                      <ChevronLeft className="h-4 w-4" />
-                                    </Button>
-                                    <span className="text-xs text-muted-foreground">
-                                      {currentScreenshotIndex + 1} / {stepsWithScreenshots.length}
-                                    </span>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => {
-                                        const newIndex = currentScreenshotIndex < stepsWithScreenshots.length - 1 ? currentScreenshotIndex + 1 : 0;
-                                        setCurrentScreenshotIndex(newIndex);
-                                        // Sync selectedStepIndex with the current screenshot step
-                                        const currentStep = stepsWithScreenshots[newIndex];
-                                        if (currentStep) {
-                                          const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
-                                          if (actualStepIndex >= 0) {
-                                            setSelectedStepIndex(actualStepIndex);
-                                          }
-                                        }
-                                      }}
-                                      className="h-8 w-8 p-0"
-                                    >
-                                      <ChevronRight className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
+                            <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                              No screenshots available yet
+                            </div>
+                          );
+                        }
 
-                              {/* Screenshot Display */}
-                              <div className="space-y-3">
-                                {currentStep.beforeScreenshot && currentStep.afterScreenshot ? (
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                      <p className="text-xs text-muted-foreground mb-2">Before</p>
-                                      <div className="border rounded-lg overflow-hidden bg-muted/30 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(currentStep.beforeScreenshot || null)}>
-                                        {currentStep.beforeScreenshot && imageErrors[currentStep.beforeScreenshot] ? (
-                                          <div className="h-48 flex items-center justify-center text-muted-foreground text-xs">
-                                            Failed to load image
-                                          </div>
-                                        ) : (
-                                          <img
-                                            src={currentStep.beforeScreenshot}
-                                            alt="Before screenshot"
-                                            className="w-full h-48 object-contain bg-white"
-                                            onError={() => recordImageError(currentStep.beforeScreenshot, {
-                                              location: "before",
-                                              scenarioId: selectedScenarioData.id,
-                                              stepId: currentStep.id,
-                                              stepNumber: currentStep.stepNumber,
-                                            })}
-                                            loading="lazy"
-                                          />
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div>
-                                      <p className="text-xs text-muted-foreground mb-2">After</p>
-                                      <div className="border rounded-lg overflow-hidden bg-muted/30 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(currentStep.afterScreenshot || null)}>
-                                        {currentStep.afterScreenshot && imageErrors[currentStep.afterScreenshot] ? (
-                                          <div className="h-48 flex items-center justify-center text-muted-foreground text-xs">
-                                            Failed to load image
-                                          </div>
-                                        ) : (
-                                          <img
-                                            src={currentStep.afterScreenshot}
-                                            alt="After screenshot"
-                                            className="w-full h-48 object-contain bg-white"
-                                            onError={() => recordImageError(currentStep.afterScreenshot, {
-                                              location: "after",
-                                              scenarioId: selectedScenarioData.id,
-                                              stepId: currentStep.id,
-                                              stepNumber: currentStep.stepNumber,
-                                            })}
-                                            loading="lazy"
-                                          />
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                ) : currentStep.screenshot ? (
-                                  <div className="border rounded-lg overflow-hidden bg-muted/30 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(currentStep.screenshot || null)}>
-                                    {currentStep.screenshot && imageErrors[currentStep.screenshot] ? (
-                                      <div className="h-96 flex items-center justify-center text-muted-foreground text-xs">
-                                        Failed to load image
-                                      </div>
-                                    ) : (
-                                      <img
-                                        src={currentStep.screenshot}
-                                        alt="Screenshot"
-                                        className="w-full h-96 object-contain bg-white"
-                                        onError={() => recordImageError(currentStep.screenshot, {
-                                          location: "single",
-                                          scenarioId: selectedScenarioData.id,
-                                          stepId: currentStep.id,
-                                          stepNumber: currentStep.stepNumber,
-                                        })}
-                                        loading="lazy"
-                                      />
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="h-[300px] flex items-center justify-center text-muted-foreground border rounded-lg">
-                                    No screenshot available for this step
-                                  </div>
-                                )}
-                              </div>
+                        const currentStep = stepsWithScreenshots[currentScreenshotIndex];
 
-                              {/* Step Indicators */}
+                        return (
+                          <div className="space-y-4">
+                            {/* Step Info */}
+                            <div className="flex items-center justify-between">
+                              <div className="text-sm font-medium">
+                                {currentStep.action}
+                              </div>
                               {stepsWithScreenshots.length > 1 && (
-                                <div className="flex items-center justify-center gap-2">
-                                  {stepsWithScreenshots.map((_, idx) => (
-                                    <button
-                                      key={idx}
-                                      onClick={() => {
-                                        setCurrentScreenshotIndex(idx);
-                                        // Sync selectedStepIndex with the current screenshot step
-                                        const currentStep = stepsWithScreenshots[idx];
-                                        if (currentStep) {
-                                          const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
-                                          if (actualStepIndex >= 0) {
-                                            setSelectedStepIndex(actualStepIndex);
-                                          }
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const newIndex = currentScreenshotIndex > 0 ? currentScreenshotIndex - 1 : stepsWithScreenshots.length - 1;
+                                      setCurrentScreenshotIndex(newIndex);
+                                      // Sync selectedStepIndex with the current screenshot step
+                                      const currentStep = stepsWithScreenshots[newIndex];
+                                      if (currentStep) {
+                                        const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
+                                        if (actualStepIndex >= 0) {
+                                          setSelectedStepIndex(actualStepIndex);
                                         }
-                                      }}
-                                      className={cn(
-                                        "h-2 rounded-full transition-all",
-                                        idx === currentScreenshotIndex
-                                          ? "w-8 bg-primary"
-                                          : "w-2 bg-muted-foreground/30"
-                                      )}
-                                    />
-                                  ))}
+                                      }
+                                    }}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <ChevronLeft className="h-4 w-4" />
+                                  </Button>
+                                  <span className="text-xs text-muted-foreground">
+                                    {currentScreenshotIndex + 1} / {stepsWithScreenshots.length}
+                                  </span>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      const newIndex = currentScreenshotIndex < stepsWithScreenshots.length - 1 ? currentScreenshotIndex + 1 : 0;
+                                      setCurrentScreenshotIndex(newIndex);
+                                      // Sync selectedStepIndex with the current screenshot step
+                                      const currentStep = stepsWithScreenshots[newIndex];
+                                      if (currentStep) {
+                                        const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
+                                        if (actualStepIndex >= 0) {
+                                          setSelectedStepIndex(actualStepIndex);
+                                        }
+                                      }
+                                    }}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <ChevronRight className="h-4 w-4" />
+                                  </Button>
                                 </div>
                               )}
                             </div>
-                          );
-                        })()}
-                      </CardContent>
-                    </Card>
 
-                    {/* Console & Network Logs */}
-                    <Card>
-                      <CardContent className="p-0">
-                        <Tabs defaultValue="console" className="w-full">
-                          <div className="flex items-center justify-between border-b px-4 py-2">
-                            <TabsList className="bg-transparent p-0 h-auto">
-                              <TabsTrigger
-                                value="console"
-                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary bg-transparent"
-                              >
-                                Console
-                              </TabsTrigger>
-                              <TabsTrigger
-                                value="network"
-                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary bg-transparent"
-                              >
-                                Network
-                              </TabsTrigger>
-                            </TabsList>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="checkbox"
-                                id="show-all-logs"
-                                checked={showAllLogs}
-                                onChange={(e) => setShowAllLogs(e.target.checked)}
-                                className="rounded border-input"
-                              />
-                              <label htmlFor="show-all-logs" className="text-xs text-muted-foreground cursor-pointer">
-                                Show all steps
-                              </label>
+                            {/* Screenshot Display */}
+                            <div className="space-y-3">
+                              {currentStep.beforeScreenshot && currentStep.afterScreenshot ? (
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div>
+                                    <p className="text-xs text-muted-foreground mb-2">Before</p>
+                                    <div className="border rounded-lg overflow-hidden bg-muted/30 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(currentStep.beforeScreenshot || null)}>
+                                      {currentStep.beforeScreenshot && imageErrors[currentStep.beforeScreenshot] ? (
+                                        <div className="h-48 flex items-center justify-center text-muted-foreground text-xs">
+                                          Failed to load image
+                                        </div>
+                                      ) : (
+                                        <img
+                                          src={currentStep.beforeScreenshot}
+                                          alt="Before screenshot"
+                                          className="w-full h-48 object-contain bg-white"
+                                          onError={() => recordImageError(currentStep.beforeScreenshot, {
+                                            location: "before",
+                                            scenarioId: selectedScenarioData.id,
+                                            stepId: currentStep.id,
+                                            stepNumber: currentStep.stepNumber,
+                                          })}
+                                          loading="lazy"
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <p className="text-xs text-muted-foreground mb-2">After</p>
+                                    <div className="border rounded-lg overflow-hidden bg-muted/30 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(currentStep.afterScreenshot || null)}>
+                                      {currentStep.afterScreenshot && imageErrors[currentStep.afterScreenshot] ? (
+                                        <div className="h-48 flex items-center justify-center text-muted-foreground text-xs">
+                                          Failed to load image
+                                        </div>
+                                      ) : (
+                                        <img
+                                          src={currentStep.afterScreenshot}
+                                          alt="After screenshot"
+                                          className="w-full h-48 object-contain bg-white"
+                                          onError={() => recordImageError(currentStep.afterScreenshot, {
+                                            location: "after",
+                                            scenarioId: selectedScenarioData.id,
+                                            stepId: currentStep.id,
+                                            stepNumber: currentStep.stepNumber,
+                                          })}
+                                          loading="lazy"
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : currentStep.screenshot ? (
+                                <div className="border rounded-lg overflow-hidden bg-muted/30 cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setExpandedImage(currentStep.screenshot || null)}>
+                                  {currentStep.screenshot && imageErrors[currentStep.screenshot] ? (
+                                    <div className="h-96 flex items-center justify-center text-muted-foreground text-xs">
+                                      Failed to load image
+                                    </div>
+                                  ) : (
+                                    <img
+                                      src={currentStep.screenshot}
+                                      alt="Screenshot"
+                                      className="w-full h-96 object-contain bg-white"
+                                      onError={() => recordImageError(currentStep.screenshot, {
+                                        location: "single",
+                                        scenarioId: selectedScenarioData.id,
+                                        stepId: currentStep.id,
+                                        stepNumber: currentStep.stepNumber,
+                                      })}
+                                      loading="lazy"
+                                    />
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="h-[300px] flex items-center justify-center text-muted-foreground border rounded-lg">
+                                  No screenshot available for this step
+                                </div>
+                              )}
                             </div>
-                          </div>
-                          <div className="p-4">
-                            <TabsContent value="console" className="mt-0">
-                              <div className="bg-muted/30 rounded-lg p-4 min-h-[200px] max-h-[400px] overflow-y-auto font-mono text-xs">
-                                {(() => {
-                                  const stepsWithScreenshots = selectedScenarioData.steps.filter(
-                                    s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
-                                  );
-                                  
-                                  let stepsToShow: Step[];
-                                  if (showAllLogs) {
-                                    stepsToShow = selectedScenarioData.steps.filter(s => s.consoleLogs && Array.isArray(s.consoleLogs) && s.consoleLogs.length > 0);
-                                  } else {
-                                    // Show logs for the step corresponding to the current screenshot
-                                    const currentStep = stepsWithScreenshots[currentScreenshotIndex];
-                                    if (currentStep) {
-                                      const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
-                                      stepsToShow = actualStepIndex >= 0 && selectedScenarioData.steps[actualStepIndex].consoleLogs && Array.isArray(selectedScenarioData.steps[actualStepIndex].consoleLogs) && selectedScenarioData.steps[actualStepIndex].consoleLogs!.length > 0
-                                        ? [selectedScenarioData.steps[actualStepIndex]]
-                                        : [];
-                                    } else {
-                                      stepsToShow = [];
-                                    }
-                                  }
 
-                                  if (stepsToShow.length === 0) {
-                                    return <p className="text-muted-foreground">No console logs available</p>;
-                                  }
-
-                                  return stepsToShow.map((step) => {
-                                    const actualIndex = selectedScenarioData.steps.findIndex(s => s.id === step.id);
-                                    const logs = Array.isArray(step.consoleLogs) ? step.consoleLogs : [];
-                                    return (
-                                      <div key={step.id} className="mb-3 pb-3 border-b border-border last:border-0">
-                                        <p className="text-xs font-semibold mb-2 text-foreground">
-                                          Step {actualIndex + 1}: {step.action}
-                                        </p>
-                                        {logs.length > 0 ? (
-                                          logs.map((log: any, i: number) => {
-                                            // Handle structured log objects
-                                            if (typeof log === 'object' && log !== null) {
-                                              const logObj = log as any;
-                                              const text = logObj.text || logObj.message || JSON.stringify(logObj);
-                                              const level = logObj.level || logObj.type || '';
-                                              const timestamp = logObj.timestamp || '';
-                                              return (
-                                                <p key={i} className={cn(
-                                                  "text-xs leading-relaxed",
-                                                  level === 'error' ? "text-red-500" :
-                                                    level === 'warning' ? "text-yellow-500" :
-                                                      "text-muted-foreground"
-                                                )}>
-                                                  {timestamp && `[${new Date(timestamp).toLocaleTimeString()}] `}
-                                                  {level && `[${level.toUpperCase()}] `}
-                                                  {text}
-                                                </p>
-                                              );
-                                            }
-                                            return (
-                                              <p key={i} className="text-xs text-muted-foreground leading-relaxed">
-                                                {typeof log === 'string' ? log : JSON.stringify(log)}
-                                              </p>
-                                            );
-                                          })
-                                        ) : (
-                                          <p className="text-xs text-muted-foreground italic">No console logs for this step</p>
-                                        )}
-                                      </div>
-                                    );
-                                  });
-                                })()}
+                            {/* Step Indicators */}
+                            {stepsWithScreenshots.length > 1 && (
+                              <div className="flex items-center justify-center gap-2">
+                                {stepsWithScreenshots.map((_, idx) => (
+                                  <button
+                                    key={idx}
+                                    onClick={() => {
+                                      setCurrentScreenshotIndex(idx);
+                                      // Sync selectedStepIndex with the current screenshot step
+                                      const currentStep = stepsWithScreenshots[idx];
+                                      if (currentStep) {
+                                        const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
+                                        if (actualStepIndex >= 0) {
+                                          setSelectedStepIndex(actualStepIndex);
+                                        }
+                                      }
+                                    }}
+                                    className={cn(
+                                      "h-2 rounded-full transition-all",
+                                      idx === currentScreenshotIndex
+                                        ? "w-8 bg-primary"
+                                        : "w-2 bg-muted-foreground/30"
+                                    )}
+                                  />
+                                ))}
                               </div>
-                            </TabsContent>
-                            <TabsContent value="network" className="mt-0">
-                              <div className="bg-muted/30 rounded-lg p-4 min-h-[200px] max-h-[400px] overflow-y-auto font-mono text-xs">
-                                {(() => {
-                                  const stepsWithScreenshots = selectedScenarioData.steps.filter(
-                                    s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
-                                  );
-                                  
-                                  let stepsToShow: Step[];
-                                  if (showAllLogs) {
-                                    stepsToShow = selectedScenarioData.steps.filter(s => s.networkLogs && Array.isArray(s.networkLogs) && s.networkLogs.length > 0);
-                                  } else {
-                                    // Show logs for the step corresponding to the current screenshot
-                                    const currentStep = stepsWithScreenshots[currentScreenshotIndex];
-                                    if (currentStep) {
-                                      const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
-                                      stepsToShow = actualStepIndex >= 0 && selectedScenarioData.steps[actualStepIndex].networkLogs && Array.isArray(selectedScenarioData.steps[actualStepIndex].networkLogs) && selectedScenarioData.steps[actualStepIndex].networkLogs!.length > 0
-                                        ? [selectedScenarioData.steps[actualStepIndex]]
-                                        : [];
-                                    } else {
-                                      stepsToShow = [];
-                                    }
-                                  }
-
-                                  if (stepsToShow.length === 0) {
-                                    return <p className="text-muted-foreground">No network activity recorded</p>;
-                                  }
-
-                                  return stepsToShow.map((step) => {
-                                    const actualIndex = selectedScenarioData.steps.findIndex(s => s.id === step.id);
-                                    const logs = Array.isArray(step.networkLogs) ? step.networkLogs : [];
-                                    return (
-                                      <div key={step.id} className="mb-3 pb-3 border-b border-border last:border-0">
-                                        <p className="text-xs font-semibold mb-2 text-foreground">
-                                          Step {actualIndex + 1}: {step.action}
-                                        </p>
-                                        {logs.length > 0 ? (
-                                          logs.map((log: any, i: number) => {
-                                            // Handle structured network log objects
-                                            if (typeof log === 'object' && log !== null) {
-                                              const logObj = log as any;
-                                              const url = logObj.url || logObj.raw?.url || '';
-                                              const method = logObj.method || logObj.raw?.method || '';
-                                              const status = logObj.status || logObj.raw?.status || '';
-                                              const timestamp = logObj.timestamp || logObj.raw?.timestamp || '';
-                                              const statusColor = status >= 400 ? 'text-red-500' : status >= 300 ? 'text-yellow-500' : status >= 200 ? 'text-green-500' : 'text-muted-foreground';
-
-                                              return (
-                                                <p key={i} className="text-xs text-muted-foreground leading-relaxed">
-                                                  {timestamp && `[${new Date(timestamp).toLocaleTimeString()}] `}
-                                                  <span className={statusColor}>
-                                                    {method} {url} {status ? `- ${status}` : ''}
-                                                  </span>
-                                                </p>
-                                              );
-                                            }
-                                            return (
-                                              <p key={i} className="text-xs text-muted-foreground leading-relaxed">
-                                                {typeof log === 'string' ? log : JSON.stringify(log)}
-                                              </p>
-                                            );
-                                          })
-                                        ) : (
-                                          <p className="text-xs text-muted-foreground italic">No network logs for this step</p>
-                                        )}
-                                      </div>
-                                    );
-                                  });
-                                })()}
-                              </div>
-                            </TabsContent>
+                            )}
                           </div>
-                        </Tabs>
-                      </CardContent>
-                    </Card>
-                  </>
-                ) : (
-                  <Card>
-                    <CardContent className="flex items-center justify-center h-[400px]">
-                      <div className="text-center space-y-2">
-                        <Globe className="w-12 h-12 mx-auto text-muted-foreground/50" />
-                        <p className="text-muted-foreground text-sm">
-                          Select a scenario to view details
-                        </p>
-                      </div>
+                        );
+                      })()}
                     </CardContent>
                   </Card>
-                )}
-              </div>
-            </div>
 
-            {/* Add Scenario Dialog */}
-            <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New Test Scenario</DialogTitle>
-                  <DialogDescription>
-                    Describe the test scenario. We'll save it and start a live run so you can watch it execute.
-                  </DialogDescription>
-                </DialogHeader>
-                <Textarea
-                  placeholder="e.g., Navigate to checkout page, fill in shipping details, and complete purchase"
-                  value={newScenario}
-                  onChange={(e) => setNewScenario(e.target.value)}
-                  className="min-h-[100px]"
-                />
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleAddScenario}
-                    disabled={!newScenario.trim()}
-                  >
-                    Save Scenario
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                  {/* Console & Network Logs */}
+                  <Card>
+                    <CardContent className="p-0">
+                      <Tabs defaultValue="console" className="w-full">
+                        <div className="flex items-center justify-between border-b px-4 py-2">
+                          <TabsList className="bg-transparent p-0 h-auto">
+                            <TabsTrigger
+                              value="console"
+                              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary bg-transparent"
+                            >
+                              Console
+                            </TabsTrigger>
+                            <TabsTrigger
+                              value="network"
+                              className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary bg-transparent"
+                            >
+                              Network
+                            </TabsTrigger>
+                          </TabsList>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id="show-all-logs"
+                              checked={showAllLogs}
+                              onChange={(e) => setShowAllLogs(e.target.checked)}
+                              className="rounded border-input"
+                            />
+                            <label htmlFor="show-all-logs" className="text-xs text-muted-foreground cursor-pointer">
+                              Show all steps
+                            </label>
+                          </div>
+                        </div>
+                        <div className="p-4">
+                          <TabsContent value="console" className="mt-0">
+                            <div className="bg-muted/30 rounded-lg p-4 min-h-[200px] max-h-[400px] overflow-y-auto font-mono text-xs">
+                              {(() => {
+                                const stepsWithScreenshots = selectedScenarioData.steps.filter(
+                                  s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
+                                );
 
-            {/* Edit Scenario Dialog */}
-            <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Edit Test Scenario</DialogTitle>
-                  <DialogDescription>
-                    Update the scenario description.
-                  </DialogDescription>
-                </DialogHeader>
-                <Textarea
-                  placeholder="Scenario description..."
-                  value={editingScenario?.name || ""}
-                  onChange={(e) => setEditingScenario(editingScenario ? { ...editingScenario, name: e.target.value } : null)}
-                  className="min-h-[100px]"
-                />
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setIsEditDialogOpen(false);
-                      setEditingScenario(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleEditScenario}
-                    disabled={!editingScenario?.name.trim()}
-                  >
-                    Save Scenario
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                                let stepsToShow: Step[];
+                                if (showAllLogs) {
+                                  stepsToShow = selectedScenarioData.steps.filter(s => s.consoleLogs && Array.isArray(s.consoleLogs) && s.consoleLogs.length > 0);
+                                } else {
+                                  // Show logs for the step corresponding to the current screenshot
+                                  const currentStep = stepsWithScreenshots[currentScreenshotIndex];
+                                  if (currentStep) {
+                                    const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
+                                    stepsToShow = actualStepIndex >= 0 && selectedScenarioData.steps[actualStepIndex].consoleLogs && Array.isArray(selectedScenarioData.steps[actualStepIndex].consoleLogs) && selectedScenarioData.steps[actualStepIndex].consoleLogs!.length > 0
+                                      ? [selectedScenarioData.steps[actualStepIndex]]
+                                      : [];
+                                  } else {
+                                    stepsToShow = [];
+                                  }
+                                }
 
-            {/* Runtime Conflict Dialog */}
-            <Dialog open={isRuntimeConflictDialogOpen} onOpenChange={setIsRuntimeConflictDialogOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Active Runtime Detected</DialogTitle>
-                  <DialogDescription>
-                    You already have a runtime running for "{activeRuntime?.suiteName || 'another test suite'}".
-                    You can only have one runtime active at a time.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsRuntimeConflictDialogOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={async () => {
-                      setIsRuntimeConflictDialogOpen(false);
-                      await handleLaunchRuntime(true);
-                    }}
-                  >
-                    Stop Existing & Start New
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                                if (stepsToShow.length === 0) {
+                                  return <p className="text-muted-foreground">No console logs available</p>;
+                                }
 
-            {/* Delete Scenario Dialog */}
-            <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Delete Scenario</DialogTitle>
-                  <DialogDescription>
-                    Are you sure you want to delete "{deletingScenario?.name}"? This action cannot be undone.
-                  </DialogDescription>
-                </DialogHeader>
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setIsDeleteDialogOpen(false);
-                      setDeletingScenario(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    onClick={handleDeleteScenario}
-                  >
-                    Delete
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+                                return stepsToShow.map((step) => {
+                                  const actualIndex = selectedScenarioData.steps.findIndex(s => s.id === step.id);
+                                  const logs = Array.isArray(step.consoleLogs) ? step.consoleLogs : [];
+                                  return (
+                                    <div key={step.id} className="mb-3 pb-3 border-b border-border last:border-0">
+                                      <p className="text-xs font-semibold mb-2 text-foreground">
+                                        Step {actualIndex + 1}: {step.action}
+                                      </p>
+                                      {logs.length > 0 ? (
+                                        logs.map((log: any, i: number) => {
+                                          // Handle structured log objects
+                                          if (typeof log === 'object' && log !== null) {
+                                            const logObj = log as any;
+                                            const text = logObj.text || logObj.message || JSON.stringify(logObj);
+                                            const level = logObj.level || logObj.type || '';
+                                            const timestamp = logObj.timestamp || '';
+                                            return (
+                                              <p key={i} className={cn(
+                                                "text-xs leading-relaxed",
+                                                level === 'error' ? "text-red-500" :
+                                                  level === 'warning' ? "text-yellow-500" :
+                                                    "text-muted-foreground"
+                                              )}>
+                                                {timestamp && `[${new Date(timestamp).toLocaleTimeString()}] `}
+                                                {level && `[${level.toUpperCase()}] `}
+                                                {text}
+                                              </p>
+                                            );
+                                          }
+                                          return (
+                                            <p key={i} className="text-xs text-muted-foreground leading-relaxed">
+                                              {typeof log === 'string' ? log : JSON.stringify(log)}
+                                            </p>
+                                          );
+                                        })
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground italic">No console logs for this step</p>
+                                      )}
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+                          </TabsContent>
+                          <TabsContent value="network" className="mt-0">
+                            <div className="bg-muted/30 rounded-lg p-4 min-h-[200px] max-h-[400px] overflow-y-auto font-mono text-xs">
+                              {(() => {
+                                const stepsWithScreenshots = selectedScenarioData.steps.filter(
+                                  s => s.status !== "pending" && (s.screenshot || s.beforeScreenshot || s.afterScreenshot)
+                                );
 
-            {/* Share Dialog */}
-            <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Share Test Suite Run</DialogTitle>
-                  <DialogDescription>
-                    Anyone with this link can view the test results and screenshots.
-                  </DialogDescription>
-                </DialogHeader>
-          <div className="flex items-center space-x-2">
-            <div className="grid flex-1 gap-2">
-              <Input
-                readOnly
-                value={`${window.location.origin}/share/suite/${suiteId}/run/latest`}
-                className="font-mono text-sm"
-              />
-            </div>
-            <Button size="sm" className="px-3" onClick={handleShare}>
-              {copied ? (
-                <Check className="h-4 w-4" />
+                                let stepsToShow: Step[];
+                                if (showAllLogs) {
+                                  stepsToShow = selectedScenarioData.steps.filter(s => s.networkLogs && Array.isArray(s.networkLogs) && s.networkLogs.length > 0);
+                                } else {
+                                  // Show logs for the step corresponding to the current screenshot
+                                  const currentStep = stepsWithScreenshots[currentScreenshotIndex];
+                                  if (currentStep) {
+                                    const actualStepIndex = selectedScenarioData.steps.findIndex(s => s.id === currentStep.id);
+                                    stepsToShow = actualStepIndex >= 0 && selectedScenarioData.steps[actualStepIndex].networkLogs && Array.isArray(selectedScenarioData.steps[actualStepIndex].networkLogs) && selectedScenarioData.steps[actualStepIndex].networkLogs!.length > 0
+                                      ? [selectedScenarioData.steps[actualStepIndex]]
+                                      : [];
+                                  } else {
+                                    stepsToShow = [];
+                                  }
+                                }
+
+                                if (stepsToShow.length === 0) {
+                                  return <p className="text-muted-foreground">No network activity recorded</p>;
+                                }
+
+                                return stepsToShow.map((step) => {
+                                  const actualIndex = selectedScenarioData.steps.findIndex(s => s.id === step.id);
+                                  const logs = Array.isArray(step.networkLogs) ? step.networkLogs : [];
+                                  return (
+                                    <div key={step.id} className="mb-3 pb-3 border-b border-border last:border-0">
+                                      <p className="text-xs font-semibold mb-2 text-foreground">
+                                        Step {actualIndex + 1}: {step.action}
+                                      </p>
+                                      {logs.length > 0 ? (
+                                        logs.map((log: any, i: number) => {
+                                          // Handle structured network log objects
+                                          if (typeof log === 'object' && log !== null) {
+                                            const logObj = log as any;
+                                            const url = logObj.url || logObj.raw?.url || '';
+                                            const method = logObj.method || logObj.raw?.method || '';
+                                            const status = logObj.status || logObj.raw?.status || '';
+                                            const timestamp = logObj.timestamp || logObj.raw?.timestamp || '';
+                                            const statusColor = status >= 400 ? 'text-red-500' : status >= 300 ? 'text-yellow-500' : status >= 200 ? 'text-green-500' : 'text-muted-foreground';
+
+                                            return (
+                                              <p key={i} className="text-xs text-muted-foreground leading-relaxed">
+                                                {timestamp && `[${new Date(timestamp).toLocaleTimeString()}] `}
+                                                <span className={statusColor}>
+                                                  {method} {url} {status ? `- ${status}` : ''}
+                                                </span>
+                                              </p>
+                                            );
+                                          }
+                                          return (
+                                            <p key={i} className="text-xs text-muted-foreground leading-relaxed">
+                                              {typeof log === 'string' ? log : JSON.stringify(log)}
+                                            </p>
+                                          );
+                                        })
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground italic">No network logs for this step</p>
+                                      )}
+                                    </div>
+                                  );
+                                });
+                              })()}
+                            </div>
+                          </TabsContent>
+                        </div>
+                      </Tabs>
+                    </CardContent>
+                  </Card>
+                </>
               ) : (
-                <Copy className="h-4 w-4" />
+                <Card>
+                  <CardContent className="flex items-center justify-center h-[400px]">
+                    <div className="text-center space-y-2">
+                      <Globe className="w-12 h-12 mx-auto text-muted-foreground/50" />
+                      <p className="text-muted-foreground text-sm">
+                        Select a scenario to view details
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
               )}
-            </Button>
-          </div>
-          <div className="rounded-lg bg-muted/50 p-4 space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-              <p className="text-sm font-medium">Live Updates Enabled</p>
             </div>
-            <p className="text-xs text-muted-foreground">
-              This link always shows the latest test run results. Perfect for sharing with your team or embedding in dashboards.
-            </p>
           </div>
-          <DialogFooter className="sm:justify-start">
-            <Button variant="secondary" onClick={() => setIsShareDialogOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
-              </DialogContent>
-            </Dialog>
 
-            {/* Expanded Image Dialog */}
-            <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
-              <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-2">
-                <DialogHeader>
-                  <DialogTitle className="sr-only">Expanded screenshot</DialogTitle>
-                  <DialogDescription className="sr-only">
-                    Full-size preview of the selected step screenshot.
-                  </DialogDescription>
-                </DialogHeader>
-                {expandedImage && !expandedImageError && (
-                  <img
-                    src={expandedImage}
-                    alt="Expanded screenshot"
-                    className="max-w-full max-h-[90vh] object-contain rounded-lg"
-                    onClick={(e) => e.stopPropagation()}
-                    onError={() => {
-                      setExpandedImageError(true);
-                      recordImageError(expandedImage, { location: "expanded" });
-                    }}
+          {/* Add Scenario Dialog */}
+          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Test Scenario</DialogTitle>
+                <DialogDescription>
+                  Describe the test scenario. We'll save it and start a live run so you can watch it execute.
+                </DialogDescription>
+              </DialogHeader>
+              <Textarea
+                placeholder="e.g., Navigate to checkout page, fill in shipping details, and complete purchase"
+                value={newScenario}
+                onChange={(e) => setNewScenario(e.target.value)}
+                className="min-h-[100px]"
+              />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleAddScenario}
+                  disabled={!newScenario.trim()}
+                >
+                  Save Scenario
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Scenario Dialog */}
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Edit Test Scenario</DialogTitle>
+                <DialogDescription>
+                  Update the scenario description.
+                </DialogDescription>
+              </DialogHeader>
+              <Textarea
+                placeholder="Scenario description..."
+                value={editingScenario?.name || ""}
+                onChange={(e) => setEditingScenario(editingScenario ? { ...editingScenario, name: e.target.value } : null)}
+                className="min-h-[100px]"
+              />
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsEditDialogOpen(false);
+                    setEditingScenario(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleEditScenario}
+                  disabled={!editingScenario?.name.trim()}
+                >
+                  Save Scenario
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Runtime Conflict Dialog */}
+          <Dialog open={isRuntimeConflictDialogOpen} onOpenChange={setIsRuntimeConflictDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Active Runtime Detected</DialogTitle>
+                <DialogDescription>
+                  You already have a runtime running for "{activeRuntime?.suiteName || 'another test suite'}".
+                  You can only have one runtime active at a time.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsRuntimeConflictDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={async () => {
+                    setIsRuntimeConflictDialogOpen(false);
+                    await handleLaunchRuntime(true);
+                  }}
+                >
+                  Stop Existing & Start New
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Delete Scenario Dialog */}
+          <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Delete Scenario</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to delete "{deletingScenario?.name}"? This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsDeleteDialogOpen(false);
+                    setDeletingScenario(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteScenario}
+                >
+                  Delete
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Share Dialog */}
+          <Dialog open={isShareDialogOpen} onOpenChange={setIsShareDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Share Test Suite Run</DialogTitle>
+                <DialogDescription>
+                  Anyone with this link can view the test results and screenshots.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex items-center space-x-2">
+                <div className="grid flex-1 gap-2">
+                  <Input
+                    readOnly
+                    value={`${window.location.origin}/share/suite/${suiteId}/run/latest`}
+                    className="font-mono text-sm"
                   />
-                )}
-                {expandedImage && expandedImageError && (
-                  <div className="h-96 flex items-center justify-center text-muted-foreground">
-                    Failed to load image
-                  </div>
-                )}
-              </DialogContent>
-            </Dialog>
-          </>
-        )}
+                </div>
+                <Button size="sm" className="px-3" onClick={handleShare}>
+                  {copied ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+              <div className="rounded-lg bg-muted/50 p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                  <p className="text-sm font-medium">Live Updates Enabled</p>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This link always shows the latest test run results. Perfect for sharing with your team or embedding in dashboards.
+                </p>
+              </div>
+              <DialogFooter className="sm:justify-start">
+                <Button variant="secondary" onClick={() => setIsShareDialogOpen(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Expanded Image Dialog */}
+          <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
+            <DialogContent className="max-w-[95vw] max-h-[95vh] w-auto h-auto p-2">
+              <DialogHeader>
+                <DialogTitle className="sr-only">Expanded screenshot</DialogTitle>
+                <DialogDescription className="sr-only">
+                  Full-size preview of the selected step screenshot.
+                </DialogDescription>
+              </DialogHeader>
+              {expandedImage && !expandedImageError && (
+                <img
+                  src={expandedImage}
+                  alt="Expanded screenshot"
+                  className="max-w-full max-h-[90vh] object-contain rounded-lg"
+                  onClick={(e) => e.stopPropagation()}
+                  onError={() => {
+                    setExpandedImageError(true);
+                    recordImageError(expandedImage, { location: "expanded" });
+                  }}
+                />
+              )}
+              {expandedImage && expandedImageError && (
+                <div className="h-96 flex items-center justify-center text-muted-foreground">
+                  Failed to load image
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
     </div>
   );
 };
